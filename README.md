@@ -18,10 +18,42 @@ OptiRoute is a high-performance, asynchronous web service designed to solve the 
 * **Python Binding:** pybind11
 * **Backend Framework:** Python 3.10+, Django 4.x, Django REST Framework (DRF)
 * **Asynchronous Task Queue:** Celery
-* **Message Broker & Cache:** Redis
-* **Database:** PostgreSQL (or SQLite for local development)
+* **Message Broker & Task Storage:** Redis (Celery job queue + task state persistence)
 * **Frontend:** HTML5, CSS3, Vanilla JavaScript, Google Maps API
-* **Infrastructure:** Docker & Docker Compose
+* **Infrastructure:** Docker & Docker Compose on a single host (e.g., one DigitalOcean Droplet)
+
+### System Workflow
+
+1. **Client** submits depot, stops, and `num_vehicles` via `POST /api/v1/optimize/`.
+2. **Django API** writes a `PENDING` task record to Redis, enqueues a Celery job, and returns `task_id` (`202 Accepted`).
+3. **Celery Worker** picks up the job from Redis, sets status to `PROCESSING`, and calls the C++ engine via pybind11.
+4. **C++ Engine** runs the VRP optimizer and returns ordered routes.
+5. **Celery Worker** writes the result (or error) back to Redis as `SUCCESS` / `FAILED`.
+6. **Client** polls `GET /api/v1/optimize/<task_id>/` until the task completes, then draws routes on the map.
+
+### Redis Task Storage
+
+Redis serves two roles: Celery message broker and task data store. Each task is stored as a JSON blob:
+
+```
+Key:   task:{task_id}
+Value: {
+  "status": "SUCCESS",
+  "input_data": {"depot": {...}, "stops": [...], "num_vehicles": 2},
+  "result_data": {"routes": [...], "total_distance_km": 10.0},
+  "error_message": null,
+  "created_at": "2026-07-13T22:00:00Z"
+}
+```
+
+Redis runs with `appendonly yes` so task data survives container restarts. No PostgreSQL or Django ORM models are required for task persistence.
+
+```
+DigitalOcean Droplet (Docker Compose)
+├── web      (Django API + frontend)
+├── worker   (Celery)
+└── redis    (Celery broker + task store)
+```
 
 ## 3. API Contract (Data Schema)
 
@@ -141,16 +173,16 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
     * Add a comprehensive `.gitignore` for Python, C++ build artifacts, and environment files.
     * Create `.env.example` with the following keys:
         * `SECRET_KEY` — Django secret key
-        * `DATABASE_URL` — PostgreSQL connection string (e.g., `postgres://user:pass@db:5432/optiroute`)
         * `REDIS_URL` — Redis connection string (e.g., `redis://redis:6379/0`)
         * `GOOGLE_MAPS_API_KEY` — Google Maps JavaScript API key
 * [ ] **Step 1.2: Docker Compose Configuration**
-    * Create `docker-compose.yml` (`web`, `worker`, `redis`, `db`).
+    * Create `docker-compose.yml` with three services: `web` (Django), `worker` (Celery), `redis`.
+    * Configure Redis with `appendonly yes` and a named volume for data persistence.
     * Write a `Dockerfile` that installs C++ build tools (`g++`, `cmake`) and Python dependencies.
     * Define the dev workflow: mount the source code as volumes so Django autoreloads, but clearly state how C++ recompilation will be triggered.
 * [ ] **Step 1.3: Django Initialization**
     * Initialize Django project (`optiroute_config`) and core app (`api`) under `backend/`.
-    * Install DRF, Celery, and Redis dependencies (`requirements.txt`).
+    * Install DRF, Celery, and `redis` Python client (`requirements.txt`).
     * Configure static files to serve the `frontend/` directory at `/`.
 
 ### 🔵 Milestone 2: C++ Optimization Engine & Python Binding
@@ -170,10 +202,11 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Build REST API endpoints and manage state transitions via Celery.
 
-* [ ] **Step 3.1: Database Models**
-    * Create `OptimizationTask` (`task_id`, `status`, `input_data`, `result_data`, `error_message`, `created_at`).
+* [ ] **Step 3.1: Redis Task Store**
+    * Create `api/task_store.py` — a thin wrapper around the Redis client with `create_task`, `get_task`, and `update_task` methods.
+    * Each task is stored at `task:{task_id}` as JSON with fields: `status`, `input_data`, `result_data`, `error_message`, `created_at`.
 * [ ] **Step 3.2: Celery Task Lifecycle**
-    * Write `@shared_task` that updates state: `PENDING` → `PROCESSING` → Calls C++ Engine → `SUCCESS` (or `FAILED` with error payload).
+    * Write `@shared_task` in `api/tasks.py` that updates Redis state: `PENDING` → `PROCESSING` → Calls C++ Engine → `SUCCESS` (or `FAILED` with error payload).
 * [ ] **Step 3.3: REST API Endpoints (DRF)**
     * Implement POST and GET endpoints strictly following the defined API Contract.
     * POST returns `202 Accepted` with `task_id` on success; validation failures return `400` with `error_message`.
@@ -202,3 +235,4 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 * [ ] **Advanced Algorithm:** Upgrade C++ core to Simulated Annealing or Genetic Algorithm.
 * [ ] **Testing Suite:** Add C++ unit tests (GTest), DRF API tests, and Celery integration tests.
 * [ ] **Security:** Implement rate limiting, Authentication, and proper CORS settings.
+* [ ] **Persistent Database (optional):** Migrate task storage from Redis to PostgreSQL if long-term task history or analytics are needed.
