@@ -69,4 +69,13 @@ if(BUILD_TESTING)
             "${Python_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bindings.py"
     )
+
+    add_test(
+        NAME optiroute_full_stack_tests
+        COMMAND
+            "${CMAKE_COMMAND}" -E env
+            "PYTHONPATH=$<TARGET_FILE_DIR:optiroute_cpp>"
+            "${Python_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_full_stack.py"
+    )
 endif()

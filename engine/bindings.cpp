@@ -11,6 +11,14 @@ namespace py = pybind11;
 
 namespace {
 
+bool is_python_number(const py::handle& value) {
+    return !py::isinstance<py::bool_>(value) &&
+           (
+               py::isinstance<py::int_>(value) ||
+               py::isinstance<py::float_>(value)
+           );
+}
+
 optiroute::Coordinate coordinate_from_dict(
     const py::dict& value,
     const std::string& field_name
@@ -21,10 +29,18 @@ optiroute::Coordinate coordinate_from_dict(
         );
     }
 
+    const py::handle latitude = value["lat"];
+    const py::handle longitude = value["lng"];
+    if (!is_python_number(latitude) || !is_python_number(longitude)) {
+        throw py::value_error(
+            field_name + " must contain numeric 'lat' and 'lng' fields"
+        );
+    }
+
     try {
         return {
-            py::cast<double>(value["lat"]),
-            py::cast<double>(value["lng"]),
+            py::cast<double>(latitude),
+            py::cast<double>(longitude),
         };
     } catch (const py::cast_error&) {
         throw py::value_error(
@@ -86,10 +102,18 @@ py::dict result_to_dict(const optiroute::OptimizationResult& result) {
 py::dict optimize_routes(
     const py::dict& depot_value,
     const py::list& stop_values,
-    int num_vehicles
+    const py::object& num_vehicles_value
 ) {
+    if (
+        py::isinstance<py::bool_>(num_vehicles_value) ||
+        !py::isinstance<py::int_>(num_vehicles_value)
+    ) {
+        throw py::value_error("num_vehicles must be an integer");
+    }
+
     const auto depot = coordinate_from_dict(depot_value, "depot");
     const auto stops = stops_from_list(stop_values);
+    const int num_vehicles = py::cast<int>(num_vehicles_value);
 
     // The optimizer is CPU-bound and does not touch Python objects. Releasing
     // the GIL lets other Python threads continue while C++ performs the work.

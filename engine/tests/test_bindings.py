@@ -70,6 +70,53 @@ class OptimizerBindingsTests(unittest.TestCase):
                 1,
             )
 
+    def test_rejects_python_booleans_and_non_integer_vehicle_count(self):
+        depot = {"lat": 0, "lng": 0}
+        stops = [{"lat": 1, "lng": 1}]
+
+        for num_vehicles in (True, False, 1.0, "1"):
+            with self.subTest(num_vehicles=num_vehicles):
+                with self.assertRaisesRegex(ValueError, "integer"):
+                    optiroute_cpp.optimize_routes(
+                        depot,
+                        stops,
+                        num_vehicles,
+                    )
+
+        for coordinate in (
+            {"lat": True, "lng": 0},
+            {"lat": 0, "lng": False},
+        ):
+            with self.subTest(coordinate=coordinate):
+                with self.assertRaisesRegex(ValueError, "numeric"):
+                    optiroute_cpp.optimize_routes(
+                        coordinate,
+                        stops,
+                        1,
+                    )
+
+    def test_rejects_non_finite_coordinates(self):
+        for value in (math.nan, math.inf, -math.inf):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "finite"):
+                    optiroute_cpp.optimize_routes(
+                        {"lat": value, "lng": 0},
+                        [{"lat": 1, "lng": 1}],
+                        1,
+                    )
+
+    def test_rejects_wrong_argument_count(self):
+        with self.assertRaises(TypeError):
+            optiroute_cpp.optimize_routes({"lat": 0, "lng": 0}, [])
+
+        with self.assertRaises(TypeError):
+            optiroute_cpp.optimize_routes(
+                {"lat": 0, "lng": 0},
+                [{"lat": 1, "lng": 1}],
+                1,
+                "extra",
+            )
+
     def test_translates_optimizer_validation_to_value_error(self):
         with self.assertRaisesRegex(ValueError, "at least one stop"):
             optiroute_cpp.optimize_routes({"lat": 0, "lng": 0}, [], 1)
@@ -87,6 +134,16 @@ class OptimizerBindingsTests(unittest.TestCase):
                 [{"lat": 1, "lng": 2}],
                 2,
             )
+
+    def test_accepts_exact_coordinate_boundaries(self):
+        result = optiroute_cpp.optimize_routes(
+            {"lat": 90, "lng": 180},
+            [{"lat": -90, "lng": -180}],
+            1,
+        )
+
+        self.assertEqual(result["routes"][0]["stop_order"], [0])
+        self.assertTrue(math.isfinite(result["total_distance_km"]))
 
     def test_accepts_keyword_arguments_and_duplicate_stops(self):
         result = optiroute_cpp.optimize_routes(

@@ -63,9 +63,12 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'EXCEPTION_HANDLER': 'api.exceptions.api_exception_handler',
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],
+    'UNAUTHENTICATED_USER': None,
 }
 
 LANGUAGE_CODE = 'en-us'
