@@ -189,7 +189,7 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Write the VRP algorithm in C++ and compile it as a Python-callable module using pybind11.
 
-* [ ] **Step 2.1: C++ VRP Algorithm (Nearest-Neighbor + 2-opt)**
+* [x] **Step 2.1: C++ VRP Algorithm (Nearest-Neighbor + 2-opt)**
     * Implement a sequential greedy assignment: repeatedly pick the unassigned stop that is globally nearest to any vehicle's current route endpoint, and assign it to that vehicle (all vehicles start at the depot). Continue until all stops are assigned.
     * After assignment, apply a 2-opt local search heuristic to optimize each vehicle's route independently.
     * Input: Depot coords, Stops coords, Num Vehicles. Output: Ordered routes matching the API contract.
