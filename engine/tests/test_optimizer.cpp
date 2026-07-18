@@ -1,5 +1,9 @@
 #include "../optimizer.h"
 
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
+
 #include <cassert>
 #include <cmath>
 #include <cstddef>

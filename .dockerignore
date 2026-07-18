@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+.env
+build
+engine/build
+engine/cmake-build-*
+__pycache__
+*.pyc
+*.pyo
+*.so
+*.dylib
+.DS_Store

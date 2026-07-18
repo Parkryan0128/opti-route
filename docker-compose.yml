@@ -9,7 +9,9 @@ services:
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: >
+      sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel
+      && python manage.py runserver 0.0.0.0:8000"
     working_dir: /app/backend
     volumes:
       # Mount source for Django autoreload during development
@@ -27,7 +29,9 @@ services:
 
   worker:
     build: .
-    command: celery -A optiroute_config worker --loglevel=info
+    command: >
+      sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel
+      && celery -A optiroute_config worker --loglevel=info"
     working_dir: /app/backend
     volumes:
       - ./backend:/app/backend
@@ -46,4 +50,5 @@ volumes:
 #   1. cp .env.example .env  (fill in SECRET_KEY and GOOGLE_MAPS_API_KEY)
 #   2. docker compose up --build
 #   3. Django/Python changes auto-reload via volume mounts
-#   4. C++ changes require manual rebuild (see Dockerfile comments), then: docker compose restart worker
+#   4. C++ changes require: docker compose restart web worker
+#      Each container rebuilds the extension before its process starts.

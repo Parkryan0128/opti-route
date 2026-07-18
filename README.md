@@ -193,9 +193,9 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
     * Implement a sequential greedy assignment: repeatedly pick the unassigned stop that is globally nearest to any vehicle's current route endpoint, and assign it to that vehicle (all vehicles start at the depot). Continue until all stops are assigned.
     * After assignment, apply a 2-opt local search heuristic to optimize each vehicle's route independently.
     * Input: Depot coords, Stops coords, Num Vehicles. Output: Ordered routes matching the API contract.
-* [ ] **Step 2.2: pybind11 Integration**
+* [x] **Step 2.2: pybind11 Integration**
     * Write `engine/bindings.cpp` to expose the C++ function to Python, converting STL vectors/structs to Python dicts/lists.
-* [ ] **Step 2.3: CMake Build System**
+* [x] **Step 2.3: CMake Build System**
     * Configure `CMakeLists.txt` to compile the engine into a `.so` module callable via `import optiroute_cpp`.
 
 ### 🟡 Milestone 3: Django API & Celery Integration

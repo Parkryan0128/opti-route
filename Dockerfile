@@ -15,10 +15,11 @@ COPY backend/ ./backend/
 COPY engine/ ./engine/
 COPY frontend/ ./frontend/
 
+RUN cmake -S /app/engine -B /app/build/engine \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_TESTING=OFF \
+    && cmake --build /app/build/engine --target optiroute_cpp --parallel
+
 WORKDIR /app/backend
 
-# C++ engine build (Milestone 2):
-#   docker compose exec web bash -c "cmake -B /app/engine/build /app/engine && cmake --build /app/engine/build"
-# After rebuilding C++ code, restart the worker: docker compose restart worker
-
-ENV PYTHONPATH=/app/engine/build:${PYTHONPATH}
+ENV PYTHONPATH=/app/build/engine:${PYTHONPATH}
