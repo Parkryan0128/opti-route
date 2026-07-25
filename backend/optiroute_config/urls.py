@@ -1,7 +1,8 @@
 from django.urls import include, path
-from django.views.generic import TemplateView
+
+from .views import index
 
 urlpatterns = [
-    path('', TemplateView.as_view(template_name='index.html'), name='index'),
+    path('', index, name='index'),
     path('api/v1/', include('api.urls')),
 ]

@@ -230,8 +230,8 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Create an interactive UI using Vanilla JS and Google Maps.
 
-* [ ] **Step 4.1: UI & Map Initialization**
-    * Load the Google Maps JavaScript API and Routes Library. Add inputs for "Number of Vehicles" and a "Start" button.
+* [x] **Step 4.1: UI & Map Initialization**
+    * Load the Google Maps JavaScript API and prepare the Routes Library. Add inputs for "Number of Vehicles" and a "Start" button.
 * [ ] **Step 4.2: Depot and Stops Logic**
     * The first click on the map drops a distinct "Depot" marker (e.g., a star or different color). Subsequent clicks drop regular "Stop" markers.
     * Disable the "Start" button until a depot marker and at least one stop marker have been placed.

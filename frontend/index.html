@@ -1,19 +1,106 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OptiRoute</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <meta name="description" content="Plan approximate multi-vehicle delivery routes with OptiRoute.">
+    <title>OptiRoute — Vehicle Route Optimizer</title>
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
 </head>
-<body>
-    <header>
-        <h1>OptiRoute</h1>
-        <p>Vehicle Routing Problem Optimizer</p>
+<body data-maps-configured="{{ google_maps_api_key|yesno:'true,false' }}">
+    <header class="site-header">
+        <a class="brand" href="/" aria-label="OptiRoute home">
+            <span class="brand-mark" aria-hidden="true">OR</span>
+            <span>
+                <strong>OptiRoute</strong>
+                <small>Vehicle route optimizer</small>
+            </span>
+        </a>
+        <span class="mvp-badge">MVP</span>
     </header>
-    <main>
-        <p>Map UI will be implemented in Milestone 4.</p>
+
+    <main class="app-shell">
+        <aside class="control-panel" aria-labelledby="planner-heading">
+            <div class="panel-heading">
+                <p class="eyebrow">Route planner</p>
+                <h1 id="planner-heading">Plan your fleet</h1>
+                <p>
+                    Select a depot and delivery stops on the map, then let the
+                    optimizer calculate an approximate route for each vehicle.
+                </p>
+            </div>
+
+            <div class="field-group">
+                <label for="vehicle-count">Number of vehicles</label>
+                <input
+                    id="vehicle-count"
+                    name="num_vehicles"
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value="1"
+                    inputmode="numeric"
+                >
+                <small>Between 1 and 10 vehicles.</small>
+            </div>
+
+            <div class="selection-summary" aria-label="Current map selections">
+                <div>
+                    <span>Depot</span>
+                    <strong id="depot-status">Not selected</strong>
+                </div>
+                <div>
+                    <span>Stops</span>
+                    <strong id="stop-count">0 / 10</strong>
+                </div>
+            </div>
+
+            <div class="instruction-card">
+                <span class="step-number" aria-hidden="true">1</span>
+                <div>
+                    <strong>Select locations</strong>
+                    <p>Your first map click will set the depot.</p>
+                </div>
+            </div>
+
+            <button id="start-optimization" type="button" disabled>
+                Start optimization
+            </button>
+
+            <p id="app-status" class="app-status" role="status" aria-live="polite">
+                Waiting for a depot and at least one stop.
+            </p>
+        </aside>
+
+        <section class="map-region" aria-label="Route planning map">
+            <div id="map" aria-label="Interactive Google map"></div>
+            <div id="map-loading" class="map-message">
+                <span class="spinner" aria-hidden="true"></span>
+                <strong>Loading map</strong>
+                <span>Connecting to Google Maps…</span>
+            </div>
+            <div id="map-error" class="map-message map-error" hidden>
+                <strong>Map unavailable</strong>
+                <span id="map-error-message">
+                    Check your API key and refresh the page.
+                </span>
+            </div>
+            <noscript>
+                <div class="map-message map-error">
+                    JavaScript is required to use the route planner.
+                </div>
+            </noscript>
+        </section>
     </main>
-    <script src="/static/js/app.js"></script>
+
+    <script src="{% static 'js/app.js' %}"></script>
+    {% if google_maps_api_key %}
+        <script
+            async
+            src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&amp;loading=async&amp;callback=initMap&amp;v=weekly"
+        ></script>
+    {% endif %}
 </body>
 </html>
