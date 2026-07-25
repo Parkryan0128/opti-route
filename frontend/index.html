@@ -61,13 +61,25 @@
                 <span class="step-number" aria-hidden="true">1</span>
                 <div>
                     <strong>Select locations</strong>
-                    <p>Your first map click will set the depot.</p>
+                    <p id="selection-instruction">
+                        Your first map click will set the depot.
+                    </p>
                 </div>
             </div>
 
-            <button id="start-optimization" type="button" disabled>
-                Start optimization
-            </button>
+            <div class="panel-actions">
+                <button id="start-optimization" type="button" disabled>
+                    Start optimization
+                </button>
+                <button
+                    id="clear-locations"
+                    class="secondary-button"
+                    type="button"
+                    disabled
+                >
+                    Clear locations
+                </button>
+            </div>
 
             <p id="app-status" class="app-status" role="status" aria-live="polite">
                 Waiting for a depot and at least one stop.

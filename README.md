@@ -232,7 +232,7 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 * [x] **Step 4.1: UI & Map Initialization**
     * Load the Google Maps JavaScript API and prepare the Routes Library. Add inputs for "Number of Vehicles" and a "Start" button.
-* [ ] **Step 4.2: Depot and Stops Logic**
+* [x] **Step 4.2: Depot and Stops Logic**
     * The first click on the map drops a distinct "Depot" marker (e.g., a star or different color). Subsequent clicks drop regular "Stop" markers.
     * Disable the "Start" button until a depot marker and at least one stop marker have been placed.
 * [ ] **Step 4.3: Async Polling Mechanism**
