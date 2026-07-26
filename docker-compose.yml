@@ -1,6 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -9,6 +10,7 @@ services:
 
   web:
     build: .
+    restart: unless-stopped
     command: >
       sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel
       && python manage.py runserver 0.0.0.0:8000"
@@ -29,6 +31,7 @@ services:
 
   worker:
     build: .
+    restart: unless-stopped
     command: >
       sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel
       && celery -A optiroute_config worker --loglevel=info"
