@@ -35,7 +35,15 @@ function(enable_strict_warnings target)
     endif()
 endfunction()
 
-add_library(optiroute_engine STATIC optimizer.cpp)
+add_library(
+    optiroute_engine
+    STATIC
+        annealing.cpp
+        construction.cpp
+        distance.cpp
+        local_search.cpp
+        optimizer.cpp
+)
 target_include_directories(
     optiroute_engine
     PUBLIC

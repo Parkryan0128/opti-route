@@ -30,8 +30,9 @@ double haversine_distance(const Coordinate& from, const Coordinate& to);
 //
 // Every vehicle is seeded with a geographically separated stop. Remaining
 // stops are assigned to minimize projected longest-route distance, with total
-// distance as a tie-breaker. Local search improves each route with 2-opt and
-// relocates or swaps stops across routes while preserving non-empty vehicles.
+// distance as a tie-breaker. Deterministic Simulated Annealing explores route
+// reversals, relocations, and swaps before a final local-search pass. Every
+// vehicle remains non-empty.
 OptimizationResult optimize_routes(
     const Coordinate& depot,
     const std::vector<Coordinate>& stops,

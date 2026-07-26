@@ -13,7 +13,7 @@ from . import task_store
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="api.optimize_routes")
+@shared_task(name="api.optimize_routes", ignore_result=True)
 def optimize_routes_task(task_id: str) -> dict[str, Any]:
     """Run the C++ optimizer and persist the task lifecycle in Redis."""
     try:

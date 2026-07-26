@@ -7,18 +7,12 @@ from rest_framework import status
 from rest_framework.test import APISimpleTestCase
 
 from api import task_store
-from api.tests.helpers import FakeRedis, empty_result, sample_input_data
+from api.tests.helpers import empty_result, patch_task_store_redis, sample_input_data
 
 
 class OptimizationApiTests(APISimpleTestCase):
     def setUp(self):
-        self.redis = FakeRedis()
-        self.redis_patcher = patch(
-            "api.task_store.get_redis_client",
-            return_value=self.redis,
-        )
-        self.redis_patcher.start()
-        self.addCleanup(self.redis_patcher.stop)
+        patch_task_store_redis(self)
         self.list_url = reverse("api:optimization-list")
         self.valid_payload = sample_input_data(two_stops=True)
 

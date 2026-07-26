@@ -5,18 +5,12 @@ from django.test import SimpleTestCase
 
 from api import task_store
 from api import tasks
-from api.tests.helpers import FakeRedis, empty_result, sample_input_data
+from api.tests.helpers import empty_result, patch_task_store_redis, sample_input_data
 
 
 class OptimizationTaskTests(SimpleTestCase):
     def setUp(self):
-        self.redis = FakeRedis()
-        self.redis_patcher = patch(
-            "api.task_store.get_redis_client",
-            return_value=self.redis,
-        )
-        self.redis_patcher.start()
-        self.addCleanup(self.redis_patcher.stop)
+        patch_task_store_redis(self)
         self.task_id = "550e8400-e29b-41d4-a716-446655440000"
         self.input_data = sample_input_data()
         task_store.create_task(

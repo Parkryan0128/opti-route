@@ -6,7 +6,6 @@ import logging
 import uuid
 
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,8 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class OptimizationListView(APIView):
-    permission_classes = [AllowAny]
-
     def post(self, request: Request) -> Response:
         serializer = OptimizationRequestSerializer(data=request.data)
         if not serializer.is_valid():
@@ -66,8 +63,6 @@ class OptimizationListView(APIView):
 
 
 class OptimizationDetailView(APIView):
-    permission_classes = [AllowAny]
-
     def get(self, request: Request, task_id: str) -> Response:
         del request
         try:

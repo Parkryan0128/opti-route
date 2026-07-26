@@ -22,19 +22,13 @@ from rest_framework.test import APIClient
 
 from api import task_store
 from api import tasks
-from api.tests.helpers import FakeRedis
+from api.tests.helpers import patch_task_store_redis
 
 
 class FullStackOptimizationTests(unittest.TestCase):
     def setUp(self):
-        self.redis = FakeRedis()
+        patch_task_store_redis(self)
         self.client = APIClient()
-        self.redis_patcher = patch(
-            "api.task_store.get_redis_client",
-            return_value=self.redis,
-        )
-        self.redis_patcher.start()
-        self.addCleanup(self.redis_patcher.stop)
 
     def test_api_to_cpp_engine_to_polling_response(self):
         payload = {

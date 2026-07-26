@@ -1,79 +1,107 @@
 # OptiRoute: Hybrid Vehicle Routing Problem (VRP) Optimizer
 
-## 1. Project Overview
+**Status: Project complete.** OptiRoute is a portfolio demonstration of a high-performance asynchronous VRP service: C++ optimization, Django/DRF + Celery + Redis, and a Google Maps frontend.
 
-OptiRoute is a high-performance, asynchronous web service designed to solve the Vehicle Routing Problem (VRP). Designed primarily as a robust portfolio demonstration, it showcases the ability to integrate high-speed C++ algorithmic calculations with a Python (Django) backend and asynchronous task management.
-
-**VRP Variant:**
+## VRP Variant
 
 * **Single Depot:** The first location selected is the start and end point for all vehicles.
 * **Closed Routes:** All vehicles must return to the depot.
 * **Uncapacitated:** Vehicle capacity constraints are ignored.
 * **Vehicle Usage:** Every requested vehicle must receive at least one stop.
 * **Objective:** Primarily minimize the longest vehicle route to balance workload; use total Haversine distance as a secondary tie-breaker. The optimizer does not guarantee a globally optimal solution.
-* **Optimization Distance Metric:** Haversine formula (straight-line distance on a sphere). Road conditions, barriers, and traffic do not influence the optimizer's stop ordering.
-* **Road Visualization:** After optimization, use the Google Maps JavaScript API Routes Library to request road-following geometry while preserving the C++ engine's stop order.
+* **Optimization Distance Metric:** Haversine (straight-line on a sphere). Road conditions, barriers, and traffic do not influence stop ordering.
+* **Road Visualization:** After optimization, the Google Maps Routes Library draws road-following geometry while preserving the C++ engine's stop order.
 
-## 2. Tech Stack & Architecture
+## Architecture
 
-* **Core Engine (Algorithm):** C++17 or higher
-* **Python Binding:** pybind11
-* **Backend Framework:** Python 3.10+, Django 4.x, Django REST Framework (DRF)
-* **Asynchronous Task Queue:** Celery
-* **Message Broker & Task Storage:** Redis (Celery job queue + task state persistence)
-* **Frontend:** HTML5, CSS3, Vanilla JavaScript, Google Maps JavaScript API + Routes Library
-* **Infrastructure:** Docker & Docker Compose on a single host (e.g., one DigitalOcean Droplet)
+* **Core Engine:** C++17 — Haversine matrix, greedy construction, 2-opt, cross-route local search, deterministic Simulated Annealing
+* **Python Binding:** pybind11 (`optiroute_cpp`)
+* **Backend:** Django + Django REST Framework, Celery worker (`ignore_result=True`; task state lives in Redis via `task_store`)
+* **Broker & Task Store:** Redis (Celery queue + `task:{id}` JSON status)
+* **Frontend:** HTML/CSS/Vanilla JS, Google Maps JavaScript API + Routes Library
+* **Infrastructure:** Docker Compose (`web`, `worker`, `redis`)
 
 ### System Workflow
 
-1. **Client** submits depot, stops, and `num_vehicles` via `POST /api/v1/optimize/`.
-2. **Django API** writes a `PENDING` task record to Redis, enqueues a Celery job, and returns `task_id` (`202 Accepted`).
-3. **Celery Worker** picks up the job from Redis, sets status to `PROCESSING`, and calls the C++ engine via pybind11.
-4. **C++ Engine** calculates Haversine distances, seeds every vehicle with a geographically separated stop, assigns remaining stops to reduce the projected longest route, then applies 2-opt and cross-route relocation/swap search before returning approximate ordered routes.
-5. **Celery Worker** writes the result (or error) back to Redis as `SUCCESS` / `FAILED`.
-6. **Client** polls `GET /api/v1/optimize/<task_id>/` until the task completes.
-7. **Client** sends each non-empty ordered vehicle route to `Route.computeRoutes()` with waypoint reordering disabled, requests the `path` field, and draws the returned road-following polylines using `createPolylines()`.
-
-### Optimization vs. Road Visualization
-
-The C++ engine and Google Routes Library serve different purposes:
-
-1. **C++ optimization (no Google route request):** Uses the locally calculated Haversine distance matrix to give every vehicle at least one stop, balance the longest route, and choose stop order.
-2. **Google road rendering (billable request):** Receives the already ordered route and returns road-following geometry for display. Google must not reorder the waypoints, because the C++ engine owns the route order.
-
-The Google road geometry does not feed back into the optimizer. Therefore, a route that is short by Haversine distance may not be the shortest route by road distance when rivers, bridges, one-way roads, mountains, or other barriers exist. The UI must describe results as **approximate optimized routes**.
-
-`Route.computeRoutes()` currently supports up to 25 intermediate waypoints per request. A vehicle route with more than 25 intermediate stops must be split into contiguous requests while preserving stop order, and the returned path segments must be drawn as one logical vehicle route. Basic route paths are billed per Compute Routes request; routes with more than 10 intermediate waypoints may use a higher-priced SKU.
-
-### Redis Task Storage
-
-Redis serves two roles: Celery message broker and task data store. Each task is stored as a JSON blob:
+1. Client submits depot, stops, and `num_vehicles` via `POST /api/v1/optimize/`.
+2. Django writes a `PENDING` task to Redis, enqueues Celery, returns `task_id` (`202`).
+3. Worker sets `PROCESSING` and calls the C++ engine via pybind11.
+4. Engine builds one Haversine distance matrix, constructs an initial solution, improves locally, runs fixed-seed Simulated Annealing, then reapplies local search.
+5. Worker writes `SUCCESS` / `FAILED` to Redis.
+6. Client polls `GET /api/v1/optimize/<task_id>/` until complete.
+7. Frontend requests road polylines from Google Routes without reordering waypoints.
 
 ```
-Key:   task:{task_id}
-Value: {
-  "status": "SUCCESS",
-  "input_data": {"depot": {...}, "stops": [...], "num_vehicles": 2},
-  "result_data": {"routes": [...], "total_distance_km": 10.0, "max_distance_km": 5.2},
-  "error_message": null,
-  "created_at": "2026-07-13T22:00:00Z"
-}
-```
-
-Redis runs with `appendonly yes` so task data survives container restarts. No PostgreSQL or Django ORM models are required for task persistence.
-
-```
-DigitalOcean Droplet (Docker Compose)
+Docker Compose host
 ├── web      (Django API + frontend)
 ├── worker   (Celery)
-└── redis    (Celery broker + task store)
+└── redis    (broker + task store)
 ```
 
-## 3. API Contract (Data Schema)
+## Local Setup
 
-To ensure alignment between the frontend, backend, and C++ engine, the following JSON schema is strictly enforced.
+```bash
+cp .env.example .env   # set SECRET_KEY, REDIS_URL, GOOGLE_MAPS_API_KEY
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+```
 
-**POST `/api/v1/optimize/` (Request)**
+### Build the C++ engine (canonical path: `build/engine`)
+
+```bash
+cmake -S engine -B build/engine -DCMAKE_BUILD_TYPE=Release
+cmake --build build/engine --parallel
+export PYTHONPATH="$(pwd)/build/engine:${PYTHONPATH}"
+```
+
+### Run locally (Redis required)
+
+```bash
+# Terminal 1 — Redis (or: docker compose up redis)
+redis-server
+
+# Terminal 2 — API
+cd backend && python manage.py runserver
+
+# Terminal 3 — Worker
+cd backend && celery -A optiroute_config worker --loglevel=info
+```
+
+Open `http://127.0.0.1:8000/`.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Django/Python changes reload via volume mounts. After C++ edits, restart so containers rebuild the extension:
+
+```bash
+docker compose restart web worker
+```
+
+## Tests
+
+```bash
+# Backend (49 tests; uses Django's dummy DB — no SQLite file created)
+cd backend && python manage.py test api optiroute_config
+
+# Engine: native C++, Python bindings, full-stack
+ctest --test-dir build/engine --output-on-failure
+
+# Optional AddressSanitizer / UndefinedBehaviorSanitizer build
+cmake -S engine -B build/engine-sanitize \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+cmake --build build/engine-sanitize --parallel
+ctest --test-dir build/engine-sanitize --output-on-failure
+```
+
+## API Contract
+
+**POST `/api/v1/optimize/`**
 
 ```json
 {
@@ -86,180 +114,47 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 }
 ```
 
-**Response (`202 Accepted`):**
+**Response (`202 Accepted`):** `{"task_id": "550e8400-e29b-41d4-a716-446655440000"}`
 
-```json
-{"task_id": "550e8400-e29b-41d4-a716-446655440000"}
-```
+**GET `/api/v1/optimize/<task_id>/`**
 
-**GET `/api/v1/optimize/<task_id>/` (Response for PENDING or PROCESSING)**
+| Status | Body |
+|--------|------|
+| `PENDING` / `PROCESSING` | `{"status": "PENDING"}` |
+| `SUCCESS` | `{"status": "SUCCESS", "result": { "routes": [...], "total_distance_km": ..., "max_distance_km": ... }}` |
+| `FAILED` | `{"status": "FAILED", "error_message": "..."}` |
 
-```json
-{"status": "PENDING"}
-```
-
-```json
-{"status": "PROCESSING"}
-```
-
-**GET `/api/v1/optimize/<task_id>/` (Response for SUCCESS)**
-
-```json
-{
-  "status": "SUCCESS",
-  "result": {
-    "routes": [
-      {
-        "vehicle_id": 1,
-        "stop_order": [0],
-        "route_coordinates": [
-          {"lat": 37.77, "lng": -122.42},
-          {"lat": 37.78, "lng": -122.43},
-          {"lat": 37.77, "lng": -122.42}
-        ],
-        "distance_km": 5.2
-      },
-      {
-        "vehicle_id": 2,
-        "stop_order": [1],
-        "route_coordinates": [
-          {"lat": 37.77, "lng": -122.42},
-          {"lat": 37.79, "lng": -122.41},
-          {"lat": 37.77, "lng": -122.42}
-        ],
-        "distance_km": 4.8
-      }
-    ],
-    "total_distance_km": 10.0,
-    "max_distance_km": 5.2
-  }
-}
-```
-
-**GET `/api/v1/optimize/<task_id>/` (Response for FAILED)**
-
-```json
-{
-  "status": "FAILED",
-  "error_message": "C++ engine raised an exception during optimization"
-}
-```
-
-**Error Responses**
-
-| Endpoint | Status | Body |
-|----------|--------|------|
-| `POST /api/v1/optimize/` | `400 Bad Request` | `{"error_message": "num_vehicles: Cannot exceed the number of stops."}` |
-| `GET /api/v1/optimize/<task_id>/` | `404 Not Found` | `{"error_message": "Task not found"}` |
-| POST or GET optimization endpoint | `503 Service Unavailable` | `{"error_message": "Optimization service unavailable"}` |
-
-> **Note:** `status` can be `PENDING`, `PROCESSING`, `SUCCESS`, or `FAILED`. Synchronous errors (`400`, `404`, `503`) use `error_message`. Async task failures (GET `FAILED`) also use `error_message`.
+Synchronous errors use `error_message` with `400` (validation), `404` (unknown task), or `503` (service unavailable).
 
 ### Field Definitions
 
-* **`vehicle_id`:** 1-based integer identifier for each vehicle (e.g., `1`, `2`, …, `num_vehicles`).
-* **`stop_order`:** A 0-based index into the `stops` array (depot excluded). For example, if `stops = [A, B, C]` and a vehicle visits A then C, its `stop_order` is `[0, 2]`. The depot is implicit and appears only in `route_coordinates`.
-* **`route_coordinates`:** The ordered optimization waypoints for a vehicle, including the depot at the start and end (Depot → Stops → Depot). These are not the full road geometry; the frontend obtains that path from Google Routes.
-* **`distance_km`:** Total Haversine distance for that vehicle's closed route, in kilometers. This is the optimization score, not the Google road distance.
-* **`total_distance_km`:** Sum of the Haversine `distance_km` values across all vehicle routes.
-* **`max_distance_km`:** Longest individual vehicle route. This is the primary workload-balancing objective.
+* **`vehicle_id`:** 1-based vehicle identifier.
+* **`stop_order`:** 0-based indexes into `stops` (depot excluded).
+* **`route_coordinates`:** Closed Haversine waypoints (depot → stops → depot), not road geometry.
+* **`distance_km` / `total_distance_km` / `max_distance_km`:** Haversine optimization scores in kilometers.
 
-### Input Validation Rules
+### Input Validation
 
 | Case | Rule |
 |------|------|
-| `num_vehicles < 1` | Reject with `400 Bad Request` |
-| `num_stops < 1` | Reject with `400 Bad Request` |
-| `num_vehicles > num_stops` | Reject with `400 Bad Request` |
-| `num_stops > 100` | Reject with `400 Bad Request` |
-| `num_vehicles > 100` | Reject with `400 Bad Request` |
-| Missing or invalid `depot` | Reject with `400 Bad Request` |
-| Invalid lat/lng (out of range) | Reject with `400 Bad Request` |
-| Duplicate coordinates | Allow silently |
+| `num_vehicles < 1` or `num_stops < 1` | `400` |
+| `num_vehicles > num_stops` | `400` |
+| `num_stops > 100` or `num_vehicles > 100` | `400` |
+| Missing/invalid coordinates | `400` |
 
-The API accepts up to 100 stops and vehicles for direct clients. The browser
-planner is intentionally capped at 10 stops and 10 vehicles to limit Google
-Routes requests and keep the interactive view readable.
+The API accepts up to 100 stops and vehicles. The browser planner is capped at 10 stops and 10 vehicles to limit Google Routes usage.
 
----
+### Redis Task Record
 
-## 4. Development Milestones & Task Steps
+```
+Key:   task:{task_id}
+Value: {
+  "status": "SUCCESS",
+  "input_data": {...},
+  "result_data": {...},
+  "error_message": null,
+  "created_at": "2026-07-13T22:00:00Z"
+}
+```
 
-### 🟢 Milestone 1: Project Initialization & Environment Setup
-
-**Goal:** Set up the unified repository structure, Docker environment, and configuration files.
-
-* [x] **Step 1.1: Repository Structure & Git Ignore**
-    * Create a monorepo: `backend/`, `engine/`, `frontend/`.
-    * Add a comprehensive `.gitignore` for Python, C++ build artifacts, and environment files.
-    * Create `.env.example` with the following keys:
-        * `SECRET_KEY` — Django secret key
-        * `REDIS_URL` — Redis connection string (e.g., `redis://redis:6379/0`)
-        * `GOOGLE_MAPS_API_KEY` — Browser-restricted key with Maps JavaScript API and Routes API enabled; Google Cloud billing is required
-* [x] **Step 1.2: Docker Compose Configuration**
-    * Create `docker-compose.yml` with three services: `web` (Django), `worker` (Celery), `redis`.
-    * Configure Redis with `appendonly yes` and a named volume for data persistence.
-    * Write a `Dockerfile` that installs C++ build tools (`g++`, `cmake`) and Python dependencies.
-    * Define the dev workflow: mount the source code as volumes so Django autoreloads, but clearly state how C++ recompilation will be triggered.
-* [x] **Step 1.3: Django Initialization**
-    * Initialize Django project (`optiroute_config`) and core app (`api`) under `backend/`.
-    * Install DRF, Celery, and `redis` Python client (`requirements.txt`).
-    * Configure static files to serve the `frontend/` directory at `/`.
-
-### 🔵 Milestone 2: C++ Optimization Engine & Python Binding
-
-**Goal:** Write the VRP algorithm in C++ and compile it as a Python-callable module using pybind11.
-
-* [x] **Step 2.1: C++ VRP Algorithm (Balanced Assignment + Local Search)**
-    * Seed every vehicle with one stop using deterministic farthest-point seeding so all requested vehicles are used and initial routes are geographically separated.
-    * Assign each remaining stop to the vehicle that minimizes projected `max_distance_km`; use projected `total_distance_km` and insertion cost as deterministic tie-breakers.
-    * After assignment, apply 2-opt within each route, then test cross-route stop relocations and swaps until no move improves `max_distance_km` or its `total_distance_km` tie-breaker. Keep every vehicle non-empty.
-    * Input: Depot coords, Stops coords, Num Vehicles. Output: Ordered routes matching the API contract.
-* [x] **Step 2.2: pybind11 Integration**
-    * Write `engine/bindings.cpp` to expose the C++ function to Python, converting STL vectors/structs to Python dicts/lists.
-* [x] **Step 2.3: CMake Build System**
-    * Configure `CMakeLists.txt` to compile the engine into a `.so` module callable via `import optiroute_cpp`.
-
-### 🟡 Milestone 3: Django API & Celery Integration
-
-**Goal:** Build REST API endpoints and manage state transitions via Celery.
-
-* [x] **Step 3.1: Redis Task Store**
-    * Create `api/task_store.py` — a thin wrapper around the Redis client with `create_task`, `get_task`, and `update_task` methods.
-    * Each task is stored at `task:{task_id}` as JSON with fields: `status`, `input_data`, `result_data`, `error_message`, `created_at`.
-* [x] **Step 3.2: Celery Task Lifecycle**
-    * Write `@shared_task` in `api/tasks.py` that updates Redis state: `PENDING` → `PROCESSING` → Calls C++ Engine → `SUCCESS` (or `FAILED` with error payload).
-* [x] **Step 3.3: REST API Endpoints (DRF)**
-    * Implement POST and GET endpoints strictly following the defined API Contract.
-    * POST returns `202 Accepted` with `task_id` on success; validation failures return `400` with `error_message`.
-    * GET returns `PENDING`/`PROCESSING`/`SUCCESS`/`FAILED` payloads per Section 3; unknown `task_id` returns `404` with `error_message`.
-
-### 🟠 Milestone 4: Frontend Visualization
-
-**Goal:** Create an interactive UI using Vanilla JS and Google Maps.
-
-* [x] **Step 4.1: UI & Map Initialization**
-    * Load the Google Maps JavaScript API and prepare the Routes Library. Add inputs for "Number of Vehicles" and a "Start" button.
-* [x] **Step 4.2: Depot and Stops Logic**
-    * The first click drops a dark marker labeled `D` for the depot. Subsequent clicks drop numbered stop markers.
-    * Disable the "Start" button until a depot marker and at least one stop marker have been placed.
-* [x] **Step 4.3: Async Polling Mechanism**
-    * On Start, send the POST request and poll the GET endpoint with non-overlapping `setTimeout` calls every 2 seconds (5 seconds while the tab is hidden).
-    * Persist the pending `task_id` and selected locations in `sessionStorage` so a refresh can restore the map and resume polling.
-    * After 30 seconds, stop polling and show a "Check status" action. The backend task continues running and the user can resume polling with the same `task_id`.
-* [x] **Step 4.4: Result Visualization**
-    * On `SUCCESS`, call `Route.computeRoutes()` for each non-empty vehicle route with `travelMode: "DRIVING"`, the depot as origin/destination, the C++-ordered stops as `intermediates`, and waypoint optimization disabled.
-    * Request only the required basic route fields (including `path`), call `createPolylines()`, and draw each vehicle using a distinct color.
-    * Show a checkbox for each vehicle so users can independently show or hide its route on the map.
-    * Split routes with more than 25 intermediate stops into contiguous requests, preserve the C++ stop order across chunks, and draw the returned segments as one logical route.
-    * If a Google Routes request fails, show a route-specific error; do not silently replace the road route with a different stop order.
-
-### 🔴 Milestone 5: Production Readiness (Optional/Future)
-
-**Goal:** Polish the application for potential B2B deployment or advanced portfolio showcasing.
-
-* [ ] **Road-Distance Optimization:** Replace the Haversine optimization matrix with road distances from OSRM or Google Compute Route Matrix. This is separate from the current post-optimization Google road visualization.
-* [ ] **Advanced Algorithm:** Upgrade C++ core to Simulated Annealing or Genetic Algorithm.
-* [x] **Testing Suite:** Native C++ tests, pybind11 contract tests, DRF/Celery/Redis tests, and a full-stack API-to-engine test.
-* [ ] **Security:** Implement rate limiting, Authentication, and proper CORS settings.
-* [ ] **Persistent Database (optional):** Migrate task storage from Redis to PostgreSQL if long-term task history or analytics are needed.
+Redis runs with `appendonly yes`. No Django ORM or Celery result backend is used for task polling.

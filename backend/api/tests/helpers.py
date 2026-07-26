@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+
 class FakeRedis:
     def __init__(self):
         self.data = {}
@@ -10,6 +13,20 @@ class FakeRedis:
 
     def get(self, key):
         return self.data.get(key)
+
+
+def patch_task_store_redis(testcase, redis_client=None):
+    """Patch task_store Redis and attach FakeRedis to the test case."""
+    if redis_client is None:
+        redis_client = FakeRedis()
+    testcase.redis = redis_client
+    redis_patcher = patch(
+        "api.task_store.get_redis_client",
+        return_value=redis_client,
+    )
+    redis_patcher.start()
+    testcase.addCleanup(redis_patcher.stop)
+    return redis_client
 
 
 def sample_input_data(*, two_stops=False):
