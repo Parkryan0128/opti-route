@@ -62,6 +62,125 @@ void assert_two_opt_local_optimum(
     }
 }
 
+bool is_better_objective(
+    const std::vector<double>& candidate_distances,
+    const std::vector<double>& current_distances
+) {
+    constexpr double tolerance = 1e-5;
+    const double candidate_max = *std::max_element(
+        candidate_distances.begin(),
+        candidate_distances.end()
+    );
+    const double current_max = *std::max_element(
+        current_distances.begin(),
+        current_distances.end()
+    );
+    double candidate_total = 0.0;
+    double current_total = 0.0;
+    for (std::size_t index = 0; index < candidate_distances.size(); ++index) {
+        candidate_total += candidate_distances[index];
+        current_total += current_distances[index];
+    }
+
+    return
+        candidate_max + tolerance < current_max ||
+        (
+            std::abs(candidate_max - current_max) <= tolerance &&
+            candidate_total + tolerance < current_total
+        );
+}
+
+void assert_cross_route_local_optimum(
+    const Coordinate& depot,
+    const std::vector<Coordinate>& stops,
+    const optiroute::OptimizationResult& result
+) {
+    std::vector<double> current_distances;
+    current_distances.reserve(result.routes.size());
+    for (const auto& route : result.routes) {
+        current_distances.push_back(route.distance_km);
+    }
+
+    for (std::size_t source = 0; source < result.routes.size(); ++source) {
+        const auto& source_order = result.routes[source].stop_order;
+        if (source_order.size() <= 1) {
+            continue;
+        }
+        for (std::size_t source_position = 0;
+             source_position < source_order.size();
+             ++source_position) {
+            for (std::size_t target = 0;
+                 target < result.routes.size();
+                 ++target) {
+                if (target == source) {
+                    continue;
+                }
+                const auto& target_order = result.routes[target].stop_order;
+                for (std::size_t target_position = 0;
+                     target_position <= target_order.size();
+                     ++target_position) {
+                    auto candidate_source = source_order;
+                    auto candidate_target = target_order;
+                    const std::size_t stop =
+                        candidate_source[source_position];
+                    candidate_source.erase(
+                        candidate_source.begin() +
+                        static_cast<std::ptrdiff_t>(source_position)
+                    );
+                    candidate_target.insert(
+                        candidate_target.begin() +
+                            static_cast<std::ptrdiff_t>(target_position),
+                        stop
+                    );
+
+                    auto candidate_distances = current_distances;
+                    candidate_distances[source] =
+                        route_distance(depot, stops, candidate_source);
+                    candidate_distances[target] =
+                        route_distance(depot, stops, candidate_target);
+                    assert(!is_better_objective(
+                        candidate_distances,
+                        current_distances
+                    ));
+                }
+            }
+        }
+    }
+
+    for (std::size_t first = 0; first < result.routes.size(); ++first) {
+        for (std::size_t second = first + 1;
+             second < result.routes.size();
+             ++second) {
+            const auto& first_order = result.routes[first].stop_order;
+            const auto& second_order = result.routes[second].stop_order;
+            for (std::size_t first_position = 0;
+                 first_position < first_order.size();
+                 ++first_position) {
+                for (std::size_t second_position = 0;
+                     second_position < second_order.size();
+                     ++second_position) {
+                    auto candidate_first = first_order;
+                    auto candidate_second = second_order;
+                    std::swap(
+                        candidate_first[first_position],
+                        candidate_second[second_position]
+                    );
+
+                    auto candidate_distances = current_distances;
+                    candidate_distances[first] =
+                        route_distance(depot, stops, candidate_first);
+                    candidate_distances[second] =
+                        route_distance(depot, stops, candidate_second);
+                    assert(!is_better_objective(
+                        candidate_distances,
+                        current_distances
+                    ));
+                }
+            }
+        }
+    }
+}
+
 template <typename Function>
 void assert_invalid_argument(Function&& function) {
     bool thrown = false;
@@ -128,6 +247,7 @@ void test_result_contract_and_assignment() {
     assert(result.routes.size() == 2);
     std::vector<int> visit_count(stops.size(), 0);
     double route_distance_sum = 0.0;
+    double longest_route_distance = 0.0;
 
     for (std::size_t index = 0; index < result.routes.size(); ++index) {
         const auto& route = result.routes[index];
@@ -149,12 +269,15 @@ void test_result_contract_and_assignment() {
 
         assert(route.distance_km >= 0.0);
         route_distance_sum += route.distance_km;
+        longest_route_distance =
+            std::max(longest_route_distance, route.distance_km);
     }
 
     for (const int count : visit_count) {
         assert(count == 1);
     }
     assert(nearly_equal(result.total_distance_km, route_distance_sum));
+    assert(nearly_equal(result.max_distance_km, longest_route_distance));
 }
 
 void test_single_stop_closed_route() {
@@ -171,6 +294,7 @@ void test_single_stop_closed_route() {
         2.0 * optiroute::haversine_distance(depot, stops.front())
     ));
     assert(nearly_equal(result.total_distance_km, route.distance_km));
+    assert(nearly_equal(result.max_distance_km, route.distance_km));
 }
 
 void test_two_opt_improves_greedy_route() {
@@ -224,6 +348,7 @@ void test_stops_at_depot_have_zero_distance() {
     const auto result = optiroute::optimize_routes(depot, stops, 3);
 
     assert(nearly_equal(result.total_distance_km, 0.0));
+    assert(nearly_equal(result.max_distance_km, 0.0));
     std::size_t visited = 0;
     for (const auto& route : result.routes) {
         assert(nearly_equal(route.distance_km, 0.0));
@@ -243,6 +368,7 @@ void test_exact_coordinate_boundaries_are_valid() {
 
     assert(result.routes.size() == 2);
     assert(std::isfinite(result.total_distance_km));
+    assert(std::isfinite(result.max_distance_km));
     assert(result.total_distance_km >= 0.0);
 }
 
@@ -264,27 +390,63 @@ void test_vehicle_count_equal_to_stop_count() {
     assert(result.routes.size() == stops.size());
     std::size_t visited = 0;
     for (const auto& route : result.routes) {
+        assert(route.stop_order.size() == 1);
         visited += route.stop_order.size();
     }
     assert(visited == stops.size());
 }
 
-void test_unused_vehicle_has_depot_only_route() {
+void test_every_vehicle_is_used_and_longest_route_is_reduced() {
     const Coordinate depot{0.0, 0.0};
     const std::vector<Coordinate> stops{
         {0.0, 1.0},
         {0.0, 2.0},
-        {0.0, 3.0},
+        {0.0, -1.0},
+        {0.0, -2.0},
     };
 
-    const auto result = optiroute::optimize_routes(depot, stops, 2);
-    const auto& unused_route = result.routes[1];
+    const auto single_vehicle = optiroute::optimize_routes(depot, stops, 1);
+    const auto balanced = optiroute::optimize_routes(depot, stops, 2);
 
-    assert(unused_route.stop_order.empty());
-    assert(unused_route.route_coordinates.size() == 2);
-    assert(same_coordinate(unused_route.route_coordinates.front(), depot));
-    assert(same_coordinate(unused_route.route_coordinates.back(), depot));
-    assert(nearly_equal(unused_route.distance_km, 0.0));
+    assert(balanced.routes.size() == 2);
+    for (const auto& route : balanced.routes) {
+        assert(!route.stop_order.empty());
+    }
+    assert(
+        balanced.max_distance_km + 1e-6 <
+        single_vehicle.max_distance_km
+    );
+}
+
+void test_cross_route_search_improves_initial_assignment() {
+    const Coordinate depot{0.0, 0.0};
+    const std::vector<Coordinate> stops{
+        {0.5577071938, -1.8999569791},
+        {-0.8998827265, -1.1071570474},
+        {0.9458848567, 0.7067979497},
+        {1.5687182708, -1.6522446695},
+        {-0.3123127213, -1.8808111222},
+        {-1.1254481008, 0.0214211524},
+        {-1.8938561213, -1.2046493973},
+        {0.5995377511, 0.1797659224},
+    };
+    const std::vector<std::vector<std::size_t>> initial_routes{
+        {3, 0, 4},
+        {6, 1},
+        {7, 2, 5},
+    };
+    double initial_max_distance = 0.0;
+    for (const auto& route : initial_routes) {
+        initial_max_distance = std::max(
+            initial_max_distance,
+            route_distance(depot, stops, route)
+        );
+    }
+
+    const auto result = optiroute::optimize_routes(depot, stops, 3);
+
+    assert(result.max_distance_km + 1e-6 < initial_max_distance);
+    assert_cross_route_local_optimum(depot, stops, result);
 }
 
 void test_is_deterministic() {
@@ -301,6 +463,7 @@ void test_is_deterministic() {
 
     assert(first.routes.size() == second.routes.size());
     assert(nearly_equal(first.total_distance_km, second.total_distance_km));
+    assert(nearly_equal(first.max_distance_km, second.max_distance_km));
     for (std::size_t index = 0; index < first.routes.size(); ++index) {
         assert(
             first.routes[index].stop_order ==
@@ -335,10 +498,13 @@ void test_randomized_result_invariants() {
 
         assert(result.routes.size() == static_cast<std::size_t>(num_vehicles));
         assert(std::isfinite(result.total_distance_km));
+        assert(std::isfinite(result.max_distance_km));
         std::vector<int> visit_count(stops.size(), 0);
         double total_distance = 0.0;
+        double max_distance = 0.0;
 
         for (const auto& route : result.routes) {
+            assert(!route.stop_order.empty());
             assert(std::isfinite(route.distance_km));
             assert(route.distance_km >= 0.0);
             assert(route.route_coordinates.size() == route.stop_order.size() + 2);
@@ -363,12 +529,15 @@ void test_randomized_result_invariants() {
             ));
             assert_two_opt_local_optimum(depot, stops, route.stop_order);
             total_distance += route.distance_km;
+            max_distance = std::max(max_distance, route.distance_km);
         }
 
         for (const int count : visit_count) {
             assert(count == 1);
         }
         assert(nearly_equal(result.total_distance_km, total_distance));
+        assert(nearly_equal(result.max_distance_km, max_distance));
+        assert_cross_route_local_optimum(depot, stops, result);
     }
 }
 
@@ -386,11 +555,13 @@ void test_maximum_stop_count() {
     const auto result = optiroute::optimize_routes(depot, stops, 10);
     std::size_t visited = 0;
     for (const auto& route : result.routes) {
+        assert(!route.stop_order.empty());
         visited += route.stop_order.size();
         assert(std::isfinite(route.distance_km));
     }
     assert(visited == 100);
     assert(std::isfinite(result.total_distance_km));
+    assert(std::isfinite(result.max_distance_km));
 
     stops.push_back({1.0, 1.0});
     assert_invalid_argument([&] {
@@ -460,7 +631,8 @@ int main() {
     test_stops_at_depot_have_zero_distance();
     test_exact_coordinate_boundaries_are_valid();
     test_vehicle_count_equal_to_stop_count();
-    test_unused_vehicle_has_depot_only_route();
+    test_every_vehicle_is_used_and_longest_route_is_reduced();
+    test_cross_route_search_improves_initial_assignment();
     test_is_deterministic();
     test_randomized_result_invariants();
     test_maximum_stop_count();

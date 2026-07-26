@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
+
+from .errors import first_error
 
 
 def api_exception_handler(
@@ -20,20 +22,5 @@ def api_exception_handler(
     if isinstance(response.data, Mapping) and "error_message" in response.data:
         return response
 
-    response.data = {"error_message": _first_error(response.data)}
+    response.data = {"error_message": first_error(response.data)}
     return response
-
-
-def _first_error(value: Any) -> str:
-    if isinstance(value, Mapping):
-        if "detail" in value:
-            return _first_error(value["detail"])
-        for field, error in value.items():
-            return f"{field}: {_first_error(error)}"
-
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        for error in value:
-            if error:
-                return _first_error(error)
-
-    return str(value)

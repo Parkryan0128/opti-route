@@ -4,13 +4,14 @@
 
 OptiRoute is a high-performance, asynchronous web service designed to solve the Vehicle Routing Problem (VRP). Designed primarily as a robust portfolio demonstration, it showcases the ability to integrate high-speed C++ algorithmic calculations with a Python (Django) backend and asynchronous task management.
 
-**VRP Variant for MVP:**
+**VRP Variant:**
 
 * **Single Depot:** The first location selected is the start and end point for all vehicles.
 * **Closed Routes:** All vehicles must return to the depot.
-* **Uncapacitated:** Vehicle capacity constraints are ignored for the MVP.
-* **Objective:** Heuristically minimize the total Haversine distance across all routes. The MVP does not guarantee a globally optimal solution.
-* **Optimization Distance Metric:** Haversine formula (straight-line distance on a sphere). Road conditions, barriers, and traffic do not influence the MVP's stop ordering.
+* **Uncapacitated:** Vehicle capacity constraints are ignored.
+* **Vehicle Usage:** Every requested vehicle must receive at least one stop.
+* **Objective:** Primarily minimize the longest vehicle route to balance workload; use total Haversine distance as a secondary tie-breaker. The optimizer does not guarantee a globally optimal solution.
+* **Optimization Distance Metric:** Haversine formula (straight-line distance on a sphere). Road conditions, barriers, and traffic do not influence the optimizer's stop ordering.
 * **Road Visualization:** After optimization, use the Google Maps JavaScript API Routes Library to request road-following geometry while preserving the C++ engine's stop order.
 
 ## 2. Tech Stack & Architecture
@@ -28,7 +29,7 @@ OptiRoute is a high-performance, asynchronous web service designed to solve the 
 1. **Client** submits depot, stops, and `num_vehicles` via `POST /api/v1/optimize/`.
 2. **Django API** writes a `PENDING` task record to Redis, enqueues a Celery job, and returns `task_id` (`202 Accepted`).
 3. **Celery Worker** picks up the job from Redis, sets status to `PROCESSING`, and calls the C++ engine via pybind11.
-4. **C++ Engine** calculates Haversine distances, applies nearest-neighbor assignment and 2-opt, and returns approximate ordered routes.
+4. **C++ Engine** calculates Haversine distances, seeds every vehicle with a geographically separated stop, assigns remaining stops to reduce the projected longest route, then applies 2-opt and cross-route relocation/swap search before returning approximate ordered routes.
 5. **Celery Worker** writes the result (or error) back to Redis as `SUCCESS` / `FAILED`.
 6. **Client** polls `GET /api/v1/optimize/<task_id>/` until the task completes.
 7. **Client** sends each non-empty ordered vehicle route to `Route.computeRoutes()` with waypoint reordering disabled, requests the `path` field, and draws the returned road-following polylines using `createPolylines()`.
@@ -37,10 +38,10 @@ OptiRoute is a high-performance, asynchronous web service designed to solve the 
 
 The C++ engine and Google Routes Library serve different purposes:
 
-1. **C++ optimization (no Google route request):** Uses the locally calculated Haversine distance matrix to choose vehicle assignments and stop order.
+1. **C++ optimization (no Google route request):** Uses the locally calculated Haversine distance matrix to give every vehicle at least one stop, balance the longest route, and choose stop order.
 2. **Google road rendering (billable request):** Receives the already ordered route and returns road-following geometry for display. Google must not reorder the waypoints, because the C++ engine owns the route order.
 
-The Google road geometry does not feed back into the MVP optimizer. Therefore, a route that is short by Haversine distance may not be the shortest route by road distance when rivers, bridges, one-way roads, mountains, or other barriers exist. The UI must describe results as **approximate optimized routes**.
+The Google road geometry does not feed back into the optimizer. Therefore, a route that is short by Haversine distance may not be the shortest route by road distance when rivers, bridges, one-way roads, mountains, or other barriers exist. The UI must describe results as **approximate optimized routes**.
 
 `Route.computeRoutes()` currently supports up to 25 intermediate waypoints per request. A vehicle route with more than 25 intermediate stops must be split into contiguous requests while preserving stop order, and the returned path segments must be drawn as one logical vehicle route. Basic route paths are billed per Compute Routes request; routes with more than 10 intermediate waypoints may use a higher-priced SKU.
 
@@ -53,7 +54,7 @@ Key:   task:{task_id}
 Value: {
   "status": "SUCCESS",
   "input_data": {"depot": {...}, "stops": [...], "num_vehicles": 2},
-  "result_data": {"routes": [...], "total_distance_km": 10.0},
+  "result_data": {"routes": [...], "total_distance_km": 10.0, "max_distance_km": 5.2},
   "error_message": null,
   "created_at": "2026-07-13T22:00:00Z"
 }
@@ -129,7 +130,8 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
         "distance_km": 4.8
       }
     ],
-    "total_distance_km": 10.0
+    "total_distance_km": 10.0,
+    "max_distance_km": 5.2
   }
 }
 ```
@@ -147,7 +149,7 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 | Endpoint | Status | Body |
 |----------|--------|------|
-| `POST /api/v1/optimize/` | `400 Bad Request` | `{"error_message": "num_vehicles cannot exceed number of stops"}` |
+| `POST /api/v1/optimize/` | `400 Bad Request` | `{"error_message": "num_vehicles: Cannot exceed the number of stops."}` |
 | `GET /api/v1/optimize/<task_id>/` | `404 Not Found` | `{"error_message": "Task not found"}` |
 | POST or GET optimization endpoint | `503 Service Unavailable` | `{"error_message": "Optimization service unavailable"}` |
 
@@ -160,6 +162,7 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 * **`route_coordinates`:** The ordered optimization waypoints for a vehicle, including the depot at the start and end (Depot → Stops → Depot). These are not the full road geometry; the frontend obtains that path from Google Routes.
 * **`distance_km`:** Total Haversine distance for that vehicle's closed route, in kilometers. This is the optimization score, not the Google road distance.
 * **`total_distance_km`:** Sum of the Haversine `distance_km` values across all vehicle routes.
+* **`max_distance_km`:** Longest individual vehicle route. This is the primary workload-balancing objective.
 
 ### Input Validation Rules
 
@@ -174,6 +177,10 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 | Invalid lat/lng (out of range) | Reject with `400 Bad Request` |
 | Duplicate coordinates | Allow silently |
 
+The API accepts up to 100 stops and vehicles for direct clients. The browser
+planner is intentionally capped at 10 stops and 10 vehicles to limit Google
+Routes requests and keep the interactive view readable.
+
 ---
 
 ## 4. Development Milestones & Task Steps
@@ -182,19 +189,19 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Set up the unified repository structure, Docker environment, and configuration files.
 
-* [ ] **Step 1.1: Repository Structure & Git Ignore**
+* [x] **Step 1.1: Repository Structure & Git Ignore**
     * Create a monorepo: `backend/`, `engine/`, `frontend/`.
     * Add a comprehensive `.gitignore` for Python, C++ build artifacts, and environment files.
     * Create `.env.example` with the following keys:
         * `SECRET_KEY` — Django secret key
         * `REDIS_URL` — Redis connection string (e.g., `redis://redis:6379/0`)
         * `GOOGLE_MAPS_API_KEY` — Browser-restricted key with Maps JavaScript API and Routes API enabled; Google Cloud billing is required
-* [ ] **Step 1.2: Docker Compose Configuration**
+* [x] **Step 1.2: Docker Compose Configuration**
     * Create `docker-compose.yml` with three services: `web` (Django), `worker` (Celery), `redis`.
     * Configure Redis with `appendonly yes` and a named volume for data persistence.
     * Write a `Dockerfile` that installs C++ build tools (`g++`, `cmake`) and Python dependencies.
     * Define the dev workflow: mount the source code as volumes so Django autoreloads, but clearly state how C++ recompilation will be triggered.
-* [ ] **Step 1.3: Django Initialization**
+* [x] **Step 1.3: Django Initialization**
     * Initialize Django project (`optiroute_config`) and core app (`api`) under `backend/`.
     * Install DRF, Celery, and `redis` Python client (`requirements.txt`).
     * Configure static files to serve the `frontend/` directory at `/`.
@@ -203,9 +210,10 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Write the VRP algorithm in C++ and compile it as a Python-callable module using pybind11.
 
-* [x] **Step 2.1: C++ VRP Algorithm (Nearest-Neighbor + 2-opt)**
-    * Implement a sequential greedy assignment: repeatedly pick the unassigned stop that is globally nearest to any vehicle's current route endpoint, and assign it to that vehicle (all vehicles start at the depot). Continue until all stops are assigned.
-    * After assignment, apply a 2-opt local search heuristic to optimize each vehicle's route independently.
+* [x] **Step 2.1: C++ VRP Algorithm (Balanced Assignment + Local Search)**
+    * Seed every vehicle with one stop using deterministic farthest-point seeding so all requested vehicles are used and initial routes are geographically separated.
+    * Assign each remaining stop to the vehicle that minimizes projected `max_distance_km`; use projected `total_distance_km` and insertion cost as deterministic tie-breakers.
+    * After assignment, apply 2-opt within each route, then test cross-route stop relocations and swaps until no move improves `max_distance_km` or its `total_distance_km` tie-breaker. Keep every vehicle non-empty.
     * Input: Depot coords, Stops coords, Num Vehicles. Output: Ordered routes matching the API contract.
 * [x] **Step 2.2: pybind11 Integration**
     * Write `engine/bindings.cpp` to expose the C++ function to Python, converting STL vectors/structs to Python dicts/lists.
@@ -226,21 +234,23 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
     * POST returns `202 Accepted` with `task_id` on success; validation failures return `400` with `error_message`.
     * GET returns `PENDING`/`PROCESSING`/`SUCCESS`/`FAILED` payloads per Section 3; unknown `task_id` returns `404` with `error_message`.
 
-### 🟠 Milestone 4: Frontend Visualization (MVP)
+### 🟠 Milestone 4: Frontend Visualization
 
 **Goal:** Create an interactive UI using Vanilla JS and Google Maps.
 
 * [x] **Step 4.1: UI & Map Initialization**
     * Load the Google Maps JavaScript API and prepare the Routes Library. Add inputs for "Number of Vehicles" and a "Start" button.
 * [x] **Step 4.2: Depot and Stops Logic**
-    * The first click on the map drops a distinct "Depot" marker (e.g., a star or different color). Subsequent clicks drop regular "Stop" markers.
+    * The first click drops a dark marker labeled `D` for the depot. Subsequent clicks drop numbered stop markers.
     * Disable the "Start" button until a depot marker and at least one stop marker have been placed.
-* [ ] **Step 4.3: Async Polling Mechanism**
-    * On Start, send POST request. Poll the GET endpoint every 2 seconds.
-    * Implement a client-side timeout: if `PROCESSING` persists for > 30 seconds, stop polling and alert the user. The backend task continues running; the user can refresh or poll again later using the same `task_id`.
-* [ ] **Step 4.4: Result Visualization**
+* [x] **Step 4.3: Async Polling Mechanism**
+    * On Start, send the POST request and poll the GET endpoint with non-overlapping `setTimeout` calls every 2 seconds (5 seconds while the tab is hidden).
+    * Persist the pending `task_id` and selected locations in `sessionStorage` so a refresh can restore the map and resume polling.
+    * After 30 seconds, stop polling and show a "Check status" action. The backend task continues running and the user can resume polling with the same `task_id`.
+* [x] **Step 4.4: Result Visualization**
     * On `SUCCESS`, call `Route.computeRoutes()` for each non-empty vehicle route with `travelMode: "DRIVING"`, the depot as origin/destination, the C++-ordered stops as `intermediates`, and waypoint optimization disabled.
     * Request only the required basic route fields (including `path`), call `createPolylines()`, and draw each vehicle using a distinct color.
+    * Show a checkbox for each vehicle so users can independently show or hide its route on the map.
     * Split routes with more than 25 intermediate stops into contiguous requests, preserve the C++ stop order across chunks, and draw the returned segments as one logical route.
     * If a Google Routes request fails, show a route-specific error; do not silently replace the road route with a different stop order.
 
@@ -248,8 +258,8 @@ To ensure alignment between the frontend, backend, and C++ engine, the following
 
 **Goal:** Polish the application for potential B2B deployment or advanced portfolio showcasing.
 
-* [ ] **Road-Distance Optimization:** Replace the Haversine optimization matrix with road distances from OSRM or Google Compute Route Matrix. This is separate from the MVP's post-optimization Google road visualization.
+* [ ] **Road-Distance Optimization:** Replace the Haversine optimization matrix with road distances from OSRM or Google Compute Route Matrix. This is separate from the current post-optimization Google road visualization.
 * [ ] **Advanced Algorithm:** Upgrade C++ core to Simulated Annealing or Genetic Algorithm.
-* [ ] **Testing Suite:** Add C++ unit tests (GTest), DRF API tests, and Celery integration tests.
+* [x] **Testing Suite:** Native C++ tests, pybind11 contract tests, DRF/Celery/Redis tests, and a full-stack API-to-engine test.
 * [ ] **Security:** Implement rate limiting, Authentication, and proper CORS settings.
 * [ ] **Persistent Database (optional):** Migrate task storage from Redis to PostgreSQL if long-term task history or analytics are needed.

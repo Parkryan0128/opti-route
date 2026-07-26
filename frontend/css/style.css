@@ -42,7 +42,6 @@ input {
     display: flex;
     height: 72px;
     align-items: center;
-    justify-content: space-between;
     padding: 0 28px;
     border-bottom: 1px solid var(--slate-200);
     background: var(--white);
@@ -83,16 +82,6 @@ input {
     margin-top: 2px;
     color: var(--slate-500);
     font-size: 0.75rem;
-}
-
-.mvp-badge {
-    padding: 5px 9px;
-    border-radius: 999px;
-    background: var(--blue-light);
-    color: var(--blue-dark);
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
 }
 
 .app-shell {
@@ -162,6 +151,12 @@ input {
 .field-group input:focus {
     border-color: var(--blue);
     box-shadow: 0 0 0 3px rgb(37 99 235 / 14%);
+}
+
+.field-group input:disabled {
+    background: var(--slate-100);
+    color: var(--slate-500);
+    cursor: not-allowed;
 }
 
 .field-group small {
@@ -300,6 +295,94 @@ input {
     font-size: 0.76rem;
     line-height: 1.45;
     text-align: center;
+}
+
+.app-status[data-state="success"] {
+    color: #067647;
+}
+
+.app-status[data-state="warning"] {
+    color: #b54708;
+}
+
+.app-status[data-state="error"] {
+    color: var(--danger);
+}
+
+.route-summary {
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid var(--slate-200);
+}
+
+.route-summary[hidden] {
+    display: none;
+}
+
+.route-summary-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.route-summary-heading h2 {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.route-summary-heading > strong {
+    color: var(--navy);
+    font-size: 0.9rem;
+}
+
+.route-list {
+    display: grid;
+    margin-top: 14px;
+    gap: 8px;
+}
+
+.route-item {
+    display: grid;
+    align-items: center;
+    padding: 10px 11px;
+    border: 1px solid var(--slate-200);
+    border-radius: 10px;
+    cursor: pointer;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 9px;
+}
+
+.route-checkbox {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.route-checkbox:disabled {
+    cursor: not-allowed;
+}
+
+.route-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.route-item strong {
+    font-size: 0.78rem;
+}
+
+.route-item span {
+    color: var(--slate-500);
+    font-size: 0.72rem;
+}
+
+.longest-route {
+    margin: 10px 2px 0;
+    color: var(--slate-500);
+    font-size: 0.72rem;
 }
 
 .map-region {

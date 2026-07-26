@@ -17,13 +17,7 @@ logger = logging.getLogger(__name__)
 def optimize_routes_task(task_id: str) -> dict[str, Any]:
     """Run the C++ optimizer and persist the task lifecycle in Redis."""
     try:
-        task = task_store.get_task(task_id)
-        if task is None:
-            raise task_store.TaskNotFoundError(
-                f"task {task_id} was not found"
-            )
-
-        task_store.update_task(task_id, status="PROCESSING")
+        task = task_store.update_task(task_id, status="PROCESSING")
         result = _run_engine(task["input_data"])
         task_store.update_task(
             task_id,

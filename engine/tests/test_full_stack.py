@@ -22,20 +22,7 @@ from rest_framework.test import APIClient
 
 from api import task_store
 from api import tasks
-
-
-class FakeRedis:
-    def __init__(self):
-        self.data = {}
-
-    def set(self, key, value, nx=False):
-        if nx and key in self.data:
-            return False
-        self.data[key] = value
-        return True
-
-    def get(self, key):
-        return self.data.get(key)
+from api.tests.helpers import FakeRedis
 
 
 class FullStackOptimizationTests(unittest.TestCase):
@@ -86,6 +73,9 @@ class FullStackOptimizationTests(unittest.TestCase):
         self.assertEqual(poll_response.data["status"], "SUCCESS")
         result = poll_response.data["result"]
         self.assertEqual(len(result["routes"]), 2)
+        self.assertTrue(
+            all(route["stop_order"] for route in result["routes"])
+        )
         visited = [
             stop
             for route in result["routes"]
@@ -93,6 +83,10 @@ class FullStackOptimizationTests(unittest.TestCase):
         ]
         self.assertEqual(sorted(visited), [0, 1, 2])
         self.assertGreater(result["total_distance_km"], 0)
+        self.assertEqual(
+            result["max_distance_km"],
+            max(route["distance_km"] for route in result["routes"]),
+        )
 
     def test_cpp_validation_failure_reaches_failed_polling_response(self):
         task_id = "invalid-engine-input"

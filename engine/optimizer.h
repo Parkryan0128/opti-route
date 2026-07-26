@@ -20,15 +20,18 @@ struct Route {
 struct OptimizationResult {
     std::vector<Route> routes;
     double total_distance_km;
+    double max_distance_km;
 };
 
 // Calculates straight-line distance over the Earth's surface in kilometers.
 double haversine_distance(const Coordinate& from, const Coordinate& to);
 
-// Solves the MVP's single-depot, closed-route, uncapacitated VRP.
+// Solves the single-depot, closed-route, uncapacitated VRP.
 //
-// Stops are assigned with the globally nearest endpoint heuristic, then each
-// resulting closed route is improved independently with 2-opt.
+// Every vehicle is seeded with a geographically separated stop. Remaining
+// stops are assigned to minimize projected longest-route distance, with total
+// distance as a tie-breaker. Local search improves each route with 2-opt and
+// relocates or swaps stops across routes while preserving non-empty vehicles.
 OptimizationResult optimize_routes(
     const Coordinate& depot,
     const std::vector<Coordinate>& stops,

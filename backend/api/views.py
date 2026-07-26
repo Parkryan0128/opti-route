@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Mapping, Sequence
-from typing import Any
 
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -14,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import task_store
+from .errors import first_error
 from .serializers import OptimizationRequestSerializer
 from .tasks import optimize_routes_task
 
@@ -27,7 +26,12 @@ class OptimizationListView(APIView):
         serializer = OptimizationRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
-                {"error_message": _first_validation_error(serializer.errors)},
+                {
+                    "error_message": first_error(
+                        serializer.errors,
+                        indexed_paths=True,
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -99,24 +103,3 @@ def _service_unavailable_response() -> Response:
         {"error_message": "Optimization service unavailable"},
         status=status.HTTP_503_SERVICE_UNAVAILABLE,
     )
-
-
-def _first_validation_error(errors: Any, path: str = "") -> str:
-    if isinstance(errors, Mapping):
-        for field, value in errors.items():
-            field_path = f"{path}.{field}" if path else str(field)
-            return _first_validation_error(value, field_path)
-
-    if (
-        isinstance(errors, Sequence)
-        and not isinstance(errors, (str, bytes))
-    ):
-        for index, value in enumerate(errors):
-            if not value:
-                continue
-            if isinstance(value, (Mapping, list, tuple)):
-                indexed_path = f"{path}[{index}]"
-                return _first_validation_error(value, indexed_path)
-            return f"{path}: {value}" if path else str(value)
-
-    return f"{path}: {errors}" if path else str(errors)

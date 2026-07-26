@@ -14,6 +14,8 @@ class IndexViewTests(SimpleTestCase):
         self.assertContains(response, 'id="clear-locations"')
         self.assertContains(response, 'id="depot-status"')
         self.assertContains(response, 'id="stop-count"')
+        self.assertContains(response, 'id="route-summary"')
+        self.assertContains(response, 'id="route-list"')
         self.assertContains(response, "key=test-browser-key")
         self.assertContains(response, "callback=initMap")
         self.assertContains(response, 'data-maps-configured="true"')

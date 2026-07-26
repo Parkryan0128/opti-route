@@ -7,20 +7,7 @@ from rest_framework import status
 from rest_framework.test import APISimpleTestCase
 
 from api import task_store
-
-
-class FakeRedis:
-    def __init__(self):
-        self.data = {}
-
-    def set(self, key, value, nx=False):
-        if nx and key in self.data:
-            return False
-        self.data[key] = value
-        return True
-
-    def get(self, key):
-        return self.data.get(key)
+from api.tests.helpers import FakeRedis, empty_result, sample_input_data
 
 
 class OptimizationApiTests(APISimpleTestCase):
@@ -33,14 +20,7 @@ class OptimizationApiTests(APISimpleTestCase):
         self.redis_patcher.start()
         self.addCleanup(self.redis_patcher.stop)
         self.list_url = reverse("api:optimization-list")
-        self.valid_payload = {
-            "depot": {"lat": 37.77, "lng": -122.42},
-            "stops": [
-                {"lat": 37.78, "lng": -122.43},
-                {"lat": 37.79, "lng": -122.41},
-            ],
-            "num_vehicles": 2,
-        }
+        self.valid_payload = sample_input_data(two_stops=True)
 
     @patch("api.views.optimize_routes_task.delay")
     def test_post_creates_and_enqueues_task(self, delay):
@@ -349,7 +329,7 @@ class OptimizationApiTests(APISimpleTestCase):
         processing = self.client.get(detail_url)
         self.assertEqual(processing.data, {"status": "PROCESSING"})
 
-        result = {"routes": [], "total_distance_km": 0.0}
+        result = empty_result()
         task_store.update_task(
             task_id,
             status="SUCCESS",

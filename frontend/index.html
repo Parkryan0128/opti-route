@@ -17,7 +17,6 @@
                 <small>Vehicle route optimizer</small>
             </span>
         </a>
-        <span class="mvp-badge">MVP</span>
     </header>
 
     <main class="app-shell">
@@ -35,7 +34,6 @@
                 <label for="vehicle-count">Number of vehicles</label>
                 <input
                     id="vehicle-count"
-                    name="num_vehicles"
                     type="number"
                     min="1"
                     max="10"
@@ -53,7 +51,7 @@
                 </div>
                 <div>
                     <span>Stops</span>
-                    <strong id="stop-count">0 / 10</strong>
+                    <strong id="stop-count" data-max-stops="10">0 / 10</strong>
                 </div>
             </div>
 
@@ -84,6 +82,20 @@
             <p id="app-status" class="app-status" role="status" aria-live="polite">
                 Waiting for a depot and at least one stop.
             </p>
+
+            <section
+                id="route-summary"
+                class="route-summary"
+                aria-labelledby="route-summary-heading"
+                hidden
+            >
+                <div class="route-summary-heading">
+                    <h2 id="route-summary-heading">Optimized routes</h2>
+                    <strong id="total-distance">0 km</strong>
+                </div>
+                <div id="route-list" class="route-list"></div>
+                <p id="longest-route" class="longest-route"></p>
+            </section>
         </aside>
 
         <section class="map-region" aria-label="Route planning map">

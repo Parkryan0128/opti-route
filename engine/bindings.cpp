@@ -19,22 +19,24 @@ bool is_python_number(const py::handle& value) {
            );
 }
 
+[[noreturn]] void throw_coordinate_error(const std::string& field_name) {
+    throw py::value_error(
+        field_name + " must contain numeric 'lat' and 'lng' fields"
+    );
+}
+
 optiroute::Coordinate coordinate_from_dict(
     const py::dict& value,
     const std::string& field_name
 ) {
     if (!value.contains("lat") || !value.contains("lng")) {
-        throw py::value_error(
-            field_name + " must contain numeric 'lat' and 'lng' fields"
-        );
+        throw_coordinate_error(field_name);
     }
 
     const py::handle latitude = value["lat"];
     const py::handle longitude = value["lng"];
     if (!is_python_number(latitude) || !is_python_number(longitude)) {
-        throw py::value_error(
-            field_name + " must contain numeric 'lat' and 'lng' fields"
-        );
+        throw_coordinate_error(field_name);
     }
 
     try {
@@ -43,9 +45,7 @@ optiroute::Coordinate coordinate_from_dict(
             py::cast<double>(longitude),
         };
     } catch (const py::cast_error&) {
-        throw py::value_error(
-            field_name + " must contain numeric 'lat' and 'lng' fields"
-        );
+        throw_coordinate_error(field_name);
     }
 }
 
@@ -96,6 +96,7 @@ py::dict result_to_dict(const optiroute::OptimizationResult& result) {
     py::dict value;
     value["routes"] = std::move(routes);
     value["total_distance_km"] = result.total_distance_km;
+    value["max_distance_km"] = result.max_distance_km;
     return value;
 }
 
@@ -145,7 +146,8 @@ Args:
     num_vehicles: Number of available vehicles.
 
 Returns:
-    A dictionary containing ``routes`` and ``total_distance_km``.
+    A dictionary containing ``routes``, ``total_distance_km``, and
+    ``max_distance_km``.
 
 Raises:
     ValueError: If an input is malformed or violates optimizer constraints.

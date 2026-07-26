@@ -5,31 +5,20 @@ from django.test import SimpleTestCase
 
 from api import task_store
 from api import tasks
-
-
-class FakeRedis:
-    def __init__(self):
-        self.data = {}
-
-    def set(self, key, value, nx=False):
-        if nx and key in self.data:
-            return False
-        self.data[key] = value
-        return True
-
-    def get(self, key):
-        return self.data.get(key)
+from api.tests.helpers import FakeRedis, empty_result, sample_input_data
 
 
 class OptimizationTaskTests(SimpleTestCase):
     def setUp(self):
         self.redis = FakeRedis()
+        self.redis_patcher = patch(
+            "api.task_store.get_redis_client",
+            return_value=self.redis,
+        )
+        self.redis_patcher.start()
+        self.addCleanup(self.redis_patcher.stop)
         self.task_id = "550e8400-e29b-41d4-a716-446655440000"
-        self.input_data = {
-            "depot": {"lat": 37.77, "lng": -122.42},
-            "stops": [{"lat": 37.78, "lng": -122.43}],
-            "num_vehicles": 1,
-        }
+        self.input_data = sample_input_data()
         task_store.create_task(
             self.task_id,
             self.input_data,
@@ -51,18 +40,13 @@ class OptimizationTaskTests(SimpleTestCase):
                 }
             ],
             "total_distance_km": 2.0,
+            "max_distance_km": 2.0,
         }
 
-        with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
-            patch(
-                "api.tasks._run_engine",
-                return_value=expected_result,
-            ) as run_engine,
-        ):
+        with patch(
+            "api.tasks._run_engine",
+            return_value=expected_result,
+        ) as run_engine:
             returned_result = tasks.optimize_routes_task.run(self.task_id)
 
         stored = task_store.get_task(self.task_id, client=self.redis)
@@ -76,10 +60,6 @@ class OptimizationTaskTests(SimpleTestCase):
         engine_error = RuntimeError("optimizer crashed")
 
         with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
             patch("api.tasks._run_engine", side_effect=engine_error),
             self.assertRaisesRegex(RuntimeError, "optimizer crashed"),
         ):
@@ -92,10 +72,6 @@ class OptimizationTaskTests(SimpleTestCase):
 
     def test_empty_exception_message_uses_exception_class_name(self):
         with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
             patch("api.tasks._run_engine", side_effect=RuntimeError()),
             self.assertRaises(RuntimeError),
         ):
@@ -111,15 +87,9 @@ class OptimizationTaskTests(SimpleTestCase):
             status="PROCESSING",
             client=self.redis,
         )
-        result = {"routes": [], "total_distance_km": 0.0}
+        result = empty_result()
 
-        with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
-            patch("api.tasks._run_engine", return_value=result),
-        ):
+        with patch("api.tasks._run_engine", return_value=result):
             returned = tasks.optimize_routes_task.run(self.task_id)
 
         self.assertEqual(returned, result)
@@ -130,10 +100,6 @@ class OptimizationTaskTests(SimpleTestCase):
         invalid_result = {"total_distance_km": float("nan")}
 
         with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
             patch("api.tasks._run_engine", return_value=invalid_result),
             self.assertRaisesRegex(ValueError, "JSON serializable"),
         ):
@@ -148,10 +114,6 @@ class OptimizationTaskTests(SimpleTestCase):
         missing_id = "missing"
 
         with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
             patch("api.tasks._run_engine") as run_engine,
             self.assertRaises(task_store.TaskNotFoundError),
         ):
@@ -175,11 +137,7 @@ class OptimizationTaskTests(SimpleTestCase):
             client=self.redis,
         )
 
-        with patch(
-            "api.task_store.get_redis_client",
-            return_value=self.redis,
-        ):
-            tasks._record_failure(self.task_id, RuntimeError("late error"))
+        tasks._record_failure(self.task_id, RuntimeError("late error"))
 
         stored = task_store.get_task(self.task_id, client=self.redis)
         self.assertEqual(stored["status"], "SUCCESS")
@@ -204,10 +162,6 @@ class OptimizationTaskTests(SimpleTestCase):
         )
 
         with (
-            patch(
-                "api.task_store.get_redis_client",
-                return_value=self.redis,
-            ),
             patch("api.tasks._run_engine") as run_engine,
             self.assertRaises(task_store.InvalidTaskTransitionError),
         ):

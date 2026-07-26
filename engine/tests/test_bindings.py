@@ -15,14 +15,19 @@ class OptimizerBindingsTests(unittest.TestCase):
 
         result = optiroute_cpp.optimize_routes(depot, stops, 2)
 
-        self.assertEqual(set(result), {"routes", "total_distance_km"})
+        self.assertEqual(
+            set(result),
+            {"routes", "total_distance_km", "max_distance_km"},
+        )
         self.assertEqual(len(result["routes"]), 2)
         self.assertGreater(result["total_distance_km"], 0)
 
         visited_stops = []
         route_distance_sum = 0.0
+        route_distances = []
         for vehicle_id, route in enumerate(result["routes"], start=1):
             self.assertEqual(route["vehicle_id"], vehicle_id)
+            self.assertGreater(len(route["stop_order"]), 0)
             self.assertEqual(route["route_coordinates"][0], depot)
             self.assertEqual(route["route_coordinates"][-1], depot)
             self.assertEqual(
@@ -32,9 +37,14 @@ class OptimizerBindingsTests(unittest.TestCase):
             self.assertTrue(math.isfinite(route["distance_km"]))
             visited_stops.extend(route["stop_order"])
             route_distance_sum += route["distance_km"]
+            route_distances.append(route["distance_km"])
 
         self.assertEqual(sorted(visited_stops), [0, 1])
         self.assertAlmostEqual(result["total_distance_km"], route_distance_sum)
+        self.assertAlmostEqual(
+            result["max_distance_km"],
+            max(route_distances),
+        )
         json.dumps(result)
 
     def test_rejects_malformed_coordinate(self):
@@ -144,6 +154,7 @@ class OptimizerBindingsTests(unittest.TestCase):
 
         self.assertEqual(result["routes"][0]["stop_order"], [0])
         self.assertTrue(math.isfinite(result["total_distance_km"]))
+        self.assertTrue(math.isfinite(result["max_distance_km"]))
 
     def test_accepts_keyword_arguments_and_duplicate_stops(self):
         result = optiroute_cpp.optimize_routes(

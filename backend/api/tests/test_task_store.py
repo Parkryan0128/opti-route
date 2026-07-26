@@ -5,31 +5,14 @@ from unittest.mock import patch
 from django.test import SimpleTestCase, override_settings
 
 from api import task_store
-
-
-class FakeRedis:
-    def __init__(self):
-        self.data = {}
-
-    def set(self, key, value, nx=False):
-        if nx and key in self.data:
-            return False
-        self.data[key] = value
-        return True
-
-    def get(self, key):
-        return self.data.get(key)
+from api.tests.helpers import FakeRedis, empty_result, sample_input_data
 
 
 class TaskStoreTests(SimpleTestCase):
     def setUp(self):
         self.redis = FakeRedis()
         self.task_id = "550e8400-e29b-41d4-a716-446655440000"
-        self.input_data = {
-            "depot": {"lat": 37.77, "lng": -122.42},
-            "stops": [{"lat": 37.78, "lng": -122.43}],
-            "num_vehicles": 1,
-        }
+        self.input_data = sample_input_data()
 
     def test_create_and_get_task(self):
         created = task_store.create_task(
@@ -111,7 +94,7 @@ class TaskStoreTests(SimpleTestCase):
             status="PROCESSING",
             client=self.redis,
         )
-        result_data = {"routes": [], "total_distance_km": 0.0}
+        result_data = empty_result()
         succeeded = task_store.update_task(
             self.task_id,
             status="SUCCESS",

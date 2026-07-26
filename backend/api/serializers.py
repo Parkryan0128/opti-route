@@ -24,33 +24,30 @@ class StrictSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
-class CoordinateSerializer(StrictSerializer):
-    lat = serializers.FloatField(min_value=-90.0, max_value=90.0)
-    lng = serializers.FloatField(min_value=-180.0, max_value=180.0)
+class FiniteFloatField(serializers.FloatField):
+    """Float field that does not coerce strings, booleans, or infinities."""
 
-    def to_internal_value(self, data: Any) -> dict[str, float]:
-        if isinstance(data, Mapping):
-            errors = {}
-            for field in ("lat", "lng"):
-                value = data.get(field)
-                if field in data and (
-                    isinstance(value, bool)
-                    or not isinstance(value, (int, float))
-                ):
-                    errors[field] = ["Must be a number."]
-            if errors:
-                raise serializers.ValidationError(errors)
+    def to_internal_value(self, data: Any) -> float:
+        if isinstance(data, bool) or not isinstance(data, (int, float)):
+            raise serializers.ValidationError("Must be a number.")
+        value = super().to_internal_value(data)
+        if not math.isfinite(value):
+            raise serializers.ValidationError("Must be a finite number.")
+        return value
+
+
+class StrictIntegerField(serializers.IntegerField):
+    """Integer field that does not coerce floats, strings, or booleans."""
+
+    def to_internal_value(self, data: Any) -> int:
+        if isinstance(data, bool) or not isinstance(data, int):
+            raise serializers.ValidationError("Must be an integer.")
         return super().to_internal_value(data)
 
-    def validate_lat(self, value: float) -> float:
-        if not math.isfinite(value):
-            raise serializers.ValidationError("Must be a finite number.")
-        return value
 
-    def validate_lng(self, value: float) -> float:
-        if not math.isfinite(value):
-            raise serializers.ValidationError("Must be a finite number.")
-        return value
+class CoordinateSerializer(StrictSerializer):
+    lat = FiniteFloatField(min_value=-90.0, max_value=90.0)
+    lng = FiniteFloatField(min_value=-180.0, max_value=180.0)
 
 
 class OptimizationRequestSerializer(StrictSerializer):
@@ -60,19 +57,7 @@ class OptimizationRequestSerializer(StrictSerializer):
         allow_empty=False,
         max_length=100,
     )
-    num_vehicles = serializers.IntegerField(min_value=1, max_value=100)
-
-    def to_internal_value(self, data: Any) -> dict[str, Any]:
-        if isinstance(data, Mapping):
-            num_vehicles = data.get("num_vehicles")
-            if "num_vehicles" in data and (
-                isinstance(num_vehicles, bool)
-                or not isinstance(num_vehicles, int)
-            ):
-                raise serializers.ValidationError(
-                    {"num_vehicles": ["Must be an integer."]}
-                )
-        return super().to_internal_value(data)
+    num_vehicles = StrictIntegerField(min_value=1, max_value=100)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         if attrs["num_vehicles"] > len(attrs["stops"]):
