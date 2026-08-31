@@ -4,18 +4,6 @@ A high-performance route optimization web service that combines a **C++ optimiza
 
 **Live Demo:** [https://optiroute.ryanparkdev.com](https://optiroute.ryanparkdev.com)
 
-
-## Key Features
-
-* **C++ VRP Engine:** Haversine distance matrix, farthest-point seeding, greedy assignment, 2-opt, cross-route relocate/swap search, and fixed-seed Simulated Annealing.
-* **Workload Balancing:** Primary objective minimizes the longest vehicle route (`max_distance_km`); total distance is the tie-breaker. Every requested vehicle gets at least one stop.
-* **pybind11 Binding:** The engine is compiled as `optiroute_cpp` and called directly from the Celery worker.
-* **Async Job Pipeline:** `POST` returns a `task_id` immediately; clients poll Redis-backed task status (`PENDING` → `PROCESSING` → `SUCCESS` / `FAILED`).
-* **No ORM Required:** Task state lives in Redis JSON (`task:{id}`); Django uses a dummy database backend.
-* **Interactive Map UI:** Click to place a depot and stops, tune vehicle count, poll for results, and toggle per-vehicle road routes.
-* **Optimization vs Visualization Split:** C++ owns stop order via Haversine; Google Routes only renders road polylines.
-* **Docker Compose Ready:** One-command local stack with `web`, `worker`, and `redis`.
-
 ***
 
 ## Project Structure
@@ -139,8 +127,7 @@ Browser (Maps UI)
        │ SUCCESS / FAILED result
        └──────────────────────────────────┘
 
-After SUCCESS, the browser calls Google Routes
-(with waypoint reordering disabled) to draw roads.
+After SUCCESS, the browser calls Google Routes to draw roads.
 ```
 
 ### 1. Optimization Engine (`engine/`)
@@ -214,22 +201,6 @@ Uses Django’s dummy database backend (no SQLite file is created).
 cmake -S engine -B build/engine -DCMAKE_BUILD_TYPE=Release
 cmake --build build/engine --parallel
 ctest --test-dir build/engine --output-on-failure
-```
-
-| Suite | What it covers |
-|-------|----------------|
-| `optimizer_cpp_tests` | Haversine, construction, local optima, golden routes, annealing determinism, edge cases |
-| `optimizer_python_binding_tests` | pybind11 contract |
-| `optiroute_full_stack_tests` | API → Celery task → C++ engine → poll response |
-
-### Optional Sanitizers
-
-```bash
-cmake -S engine -B build/engine-sanitize \
-  -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-cmake --build build/engine-sanitize --parallel
-ctest --test-dir build/engine-sanitize --output-on-failure
 ```
 
 ## Contact
