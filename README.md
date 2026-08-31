@@ -1,23 +1,9 @@
-# Hybrid VRP Optimizer
+# Route Optimization Engine
 
-A high-performance **Vehicle Routing Problem (VRP)** web service that combines a **C++ optimization engine** with an asynchronous **Django / Celery / Redis** backend and a **Google Maps** planner UI. The engine balances multi-vehicle closed routes using Haversine distance, local search, and deterministic Simulated Annealing; the frontend then draws road-following geometry without changing the optimized stop order.
+A high-performance route optimization web service that combines a **C++ optimization engine** with an asynchronous Django / Celery / Redis backend and a Google Maps planner UI. The engine balances multi-vehicle closed routes using Haversine distance, local search, and deterministic Simulated Annealing; the frontend then draws road-following geometry without changing the optimized stop order.
 
 **Live Demo:** [https://optiroute.ryanparkdev.com](https://optiroute.ryanparkdev.com)
 
-***
-
-## Table of Contents
-
-* [Key Features](#-key-features)
-* [Project Structure](#-project-structure)
-* [How to Build and Run](#️-how-to-build-and-run)
-* [How It Works (Architecture)](#️-how-it-works-architecture)
-* [API Contract](#-api-contract)
-* [Testing](#-testing)
-* [Limitations](#limitations)
-* [Contact](#-contact)
-
-***
 
 ## Key Features
 
@@ -245,17 +231,6 @@ cmake -S engine -B build/engine-sanitize \
 cmake --build build/engine-sanitize --parallel
 ctest --test-dir build/engine-sanitize --output-on-failure
 ```
-
-***
-<a id="limitations"></a>
-## Limitations
-
-* **Haversine optimization** — road barriers, one-ways, and traffic do not affect stop ordering.
-* **Heuristic, not exact** — solutions are approximate; global optimality is not guaranteed.
-* **Google Maps billing** — road visualization uses the Routes API after optimization.
-* **Demo-oriented deploy** — current Compose stack uses Django’s development server; production hardening (gunicorn, `DEBUG=False` static serving, closed Redis port) is optional follow-up work.
-
-***
 
 ## Contact
 
