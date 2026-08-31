@@ -1,8 +1,4 @@
-# OptiRoute — Hybrid VRP Optimizer
-
-[![Language](https://img.shields.io/badge/Language-C%2B%2B17%20%2B%20Python-blue.svg)]()
-[![Stack](https://img.shields.io/badge/Stack-Django%20%7C%20Celery%20%7C%20Redis-green.svg)]()
-[![Build](https://img.shields.io/badge/Build-CMake%20%2B%20Docker-lightgrey.svg)]()
+# Hybrid VRP Optimizer
 
 A high-performance **Vehicle Routing Problem (VRP)** web service that combines a **C++ optimization engine** with an asynchronous **Django / Celery / Redis** backend and a **Google Maps** planner UI. The engine balances multi-vehicle closed routes using Haversine distance, local search, and deterministic Simulated Annealing; the frontend then draws road-following geometry without changing the optimized stop order.
 
@@ -10,7 +6,7 @@ A high-performance **Vehicle Routing Problem (VRP)** web service that combines a
 
 ***
 
-## 📋 Table of Contents
+## Table of Contents
 
 * [Key Features](#-key-features)
 * [Project Structure](#-project-structure)
@@ -23,7 +19,7 @@ A high-performance **Vehicle Routing Problem (VRP)** web service that combines a
 
 ***
 
-## ✨ Key Features
+## Key Features
 
 * **C++ VRP Engine:** Haversine distance matrix, farthest-point seeding, greedy assignment, 2-opt, cross-route relocate/swap search, and fixed-seed Simulated Annealing.
 * **Workload Balancing:** Primary objective minimizes the longest vehicle route (`max_distance_km`); total distance is the tie-breaker. Every requested vehicle gets at least one stop.
@@ -36,7 +32,7 @@ A high-performance **Vehicle Routing Problem (VRP)** web service that combines a
 
 ***
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 .
@@ -68,7 +64,7 @@ A high-performance **Vehicle Routing Problem (VRP)** web service that combines a
 
 ***
 
-## ⚙️ How to Build and Run
+## How to Build and Run
 
 ### 1. Requirements
 
@@ -137,7 +133,7 @@ cd backend && celery -A optiroute_config worker --loglevel=info
 
 ***
 
-## 🏗️ How It Works (Architecture)
+## How It Works (Architecture)
 
 ```text
 Browser (Maps UI)
@@ -183,7 +179,7 @@ After SUCCESS, the browser calls Google Routes
 
 ***
 
-## 📡 API Contract
+## API Contract
 
 **POST `/api/v1/optimize/`**
 
@@ -216,7 +212,7 @@ Synchronous errors use `error_message` with `400` (validation), `404` (unknown t
 
 ***
 
-## 🧪 Testing
+## Testing
 
 ### Backend
 
@@ -252,7 +248,7 @@ ctest --test-dir build/engine-sanitize --output-on-failure
 
 ***
 <a id="limitations"></a>
-## ⚠️ Limitations
+## Limitations
 
 * **Haversine optimization** — road barriers, one-ways, and traffic do not affect stop ordering.
 * **Heuristic, not exact** — solutions are approximate; global optimality is not guaranteed.
@@ -261,7 +257,7 @@ ctest --test-dir build/engine-sanitize --output-on-failure
 
 ***
 
-## 📧 Contact
+## Contact
 
 - **Name:** Ryan Park
 - **Email:** [parkryan0128@gmail.com](mailto:parkryan0128@gmail.com)
