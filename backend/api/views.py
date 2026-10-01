@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import task_store
+from .admission import QueueBusyError, check_capacity
 from .errors import first_error
 from .serializers import OptimizationRequestSerializer
 from .tasks import optimize_routes_task
@@ -34,7 +35,13 @@ class OptimizationListView(APIView):
 
         task_id = str(uuid.uuid4())
         try:
+            check_capacity()
             task_store.create_task(task_id, serializer.validated_data)
+        except QueueBusyError as error:
+            return Response(
+                {"error_message": str(error)}, status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": "1"},
+            )
         except Exception:
             logger.exception("Could not create optimization task")
             return _service_unavailable_response()
@@ -67,6 +74,8 @@ class OptimizationDetailView(APIView):
         del request
         try:
             task = task_store.get_task(task_id)
+            if task is not None:
+                task = task_store.fail_stale_task(task_id, task)
         except Exception:
             logger.exception("Could not read optimization task %s", task_id)
             return _service_unavailable_response()

@@ -1,0 +1,7 @@
+optiroute.ryanparkdev.com {
+    request_body {
+        max_size 64KB
+    }
+    encode zstd gzip
+    reverse_proxy optiroute-web:8000
+}

@@ -2,6 +2,9 @@
 .gitignore
 .venv
 .env
+**/.env.production*
+deploy/.deployed-image
+deploy/.previous-image
 build
 engine/build
 engine/cmake-build-*

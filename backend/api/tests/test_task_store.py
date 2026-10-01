@@ -301,4 +301,6 @@ class RedisClientTests(SimpleTestCase):
         from_url.assert_called_once_with(
             "redis://example:6379/5",
             decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
         )

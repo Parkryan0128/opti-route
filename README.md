@@ -6,6 +6,8 @@ The solver assigns each stop to a vehicle and determines the visit order. It pri
 
 [Live demo](https://optiroute.ryanparkdev.com)
 
+For the shared OVH VPS, use the [production deployment guide](docs/deployment.md). Main pushes build/test a production image; the Deploy workflow updates the VM after its one-time SSH setup is enabled.
+
 ## How it works
 
 ```text

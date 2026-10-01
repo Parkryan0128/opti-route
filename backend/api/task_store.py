@@ -50,7 +50,10 @@ class CorruptTaskDataError(TaskStoreError):
 @lru_cache(maxsize=1)
 def get_redis_client() -> Redis:
     """Return the process-wide Redis connection pool client."""
-    return Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    return Redis.from_url(
+        settings.REDIS_URL, decode_responses=True,
+        socket_connect_timeout=2, socket_timeout=2,
+    )
 
 
 def task_key(task_id: str) -> str:
@@ -80,6 +83,7 @@ def create_task(
         task_key(task_id),
         _serialize_task(task),
         nx=True,
+        ex=settings.TASK_RETENTION_SECONDS,
     )
     if not created:
         raise TaskAlreadyExistsError(f"task {task_id} already exists")
@@ -131,8 +135,23 @@ def update_task(
             raise TypeError("error_message must be a string or None")
         existing["error_message"] = error_message
 
-    redis_client.set(task_key(task_id), _serialize_task(existing))
+    redis_client.set(
+        task_key(task_id), _serialize_task(existing),
+        ex=settings.TASK_RETENTION_SECONDS,
+    )
     return _copy_task(existing)
+
+
+def fail_stale_task(task_id: str, task: dict[str, Any]) -> dict[str, Any]:
+    """Resolve abandoned work instead of leaving the browser polling forever."""
+    created = datetime.fromisoformat(task["created_at"].replace("Z", "+00:00"))
+    age = (datetime.now(timezone.utc) - created).total_seconds()
+    if task["status"] in {"PENDING", "PROCESSING"} and age >= settings.TASK_MAX_AGE_SECONDS:
+        return update_task(
+            task_id, status="FAILED",
+            error_message="The task expired before it could finish. Submit it again.",
+        )
+    return task
 
 
 def _validate_status(status: Any) -> None:

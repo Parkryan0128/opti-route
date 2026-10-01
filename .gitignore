@@ -1,6 +1,9 @@
 # Environment
 .env
 .env.local
+.env.production*
+deploy/.deployed-image
+deploy/.previous-image
 
 # Python
 __pycache__/

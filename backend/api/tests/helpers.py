@@ -4,11 +4,13 @@ from unittest.mock import patch
 class FakeRedis:
     def __init__(self):
         self.data = {}
+        self.expirations = {}
 
-    def set(self, key, value, nx=False):
+    def set(self, key, value, nx=False, ex=None):
         if nx and key in self.data:
             return False
         self.data[key] = value
+        self.expirations[key] = ex
         return True
 
     def get(self, key):

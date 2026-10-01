@@ -9,7 +9,9 @@ services:
       - "6379:6379"
 
   web:
-    build: .
+    build:
+      context: .
+      target: development
     restart: unless-stopped
     command: >
       sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel
@@ -30,7 +32,9 @@ services:
       - redis
 
   worker:
-    build: .
+    build:
+      context: .
+      target: development
     restart: unless-stopped
     command: >
       sh -c "cmake --build /app/build/engine --target optiroute_cpp --parallel

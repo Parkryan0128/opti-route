@@ -107,11 +107,8 @@ class OptimizationTaskTests(SimpleTestCase):
     def test_missing_task_is_not_sent_to_engine(self):
         missing_id = "missing"
 
-        with (
-            patch("api.tasks._run_engine") as run_engine,
-            self.assertRaises(task_store.TaskNotFoundError),
-        ):
-            tasks.optimize_routes_task.run(missing_id)
+        with patch("api.tasks._run_engine") as run_engine:
+            self.assertEqual(tasks.optimize_routes_task.run(missing_id), {})
 
         run_engine.assert_not_called()
         self.assertIsNone(
@@ -155,11 +152,8 @@ class OptimizationTaskTests(SimpleTestCase):
             client=self.redis,
         )
 
-        with (
-            patch("api.tasks._run_engine") as run_engine,
-            self.assertRaises(task_store.InvalidTaskTransitionError),
-        ):
-            tasks.optimize_routes_task.run(self.task_id)
+        with patch("api.tasks._run_engine") as run_engine:
+            self.assertEqual(tasks.optimize_routes_task.run(self.task_id), {})
 
         run_engine.assert_not_called()
         stored = task_store.get_task(self.task_id, client=self.redis)

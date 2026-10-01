@@ -1,0 +1,65 @@
+name: optiroute-production
+x-runtime: &runtime
+  restart: unless-stopped
+  logging:
+    driver: local
+    options: {max-size: "10m", max-file: "3"}
+x-app: &app
+  <<: *runtime
+  image: ${APP_IMAGE:?Run deploy/init-env.sh first}
+  init: true
+  environment:
+    APP_ENV: production
+    SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+    ALLOWED_HOSTS: ${DEMO_HOST:?Set DEMO_HOST},localhost,127.0.0.1
+    GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:?Set the browser Maps API key}
+    REDIS_URL: redis://redis:6379/0
+  depends_on:
+    redis: {condition: service_healthy}
+services:
+  redis:
+    <<: *runtime
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, "yes", --appendfsync, everysec, --maxmemory, 64mb, --maxmemory-policy, noeviction, --save, ""]
+    volumes: [redis-data:/data]
+    networks: [backend]
+    mem_limit: 192m
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+  web:
+    <<: *app
+    networks:
+      backend:
+      edge:
+        aliases: [optiroute-web]
+    mem_limit: 192m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+  worker:
+    <<: *app
+    command: [celery, -A, optiroute_config, worker, --loglevel=info, --concurrency=1, --prefetch-multiplier=1, --hostname=optiroute@worker]
+    networks: [backend]
+    mem_limit: 320m
+    cpus: 1.0
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, celery, -A, optiroute_config, inspect, ping, --destination=optiroute@worker, --timeout=3]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+volumes:
+  redis-data:
+networks:
+  backend:
+    internal: true
+  edge:
+    name: portfolio-edge
+    external: true
