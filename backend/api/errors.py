@@ -17,8 +17,12 @@ def first_error(
         if not indexed_paths and "detail" in value:
             return first_error(value["detail"])
         for field, error in value.items():
-            separator = "." if indexed_paths and path else ": "
-            field_path = f"{path}{separator}{field}" if path else str(field)
+            if indexed_paths and str(field).isdecimal():
+                # ListSerializer errors may use numeric mapping keys.
+                field_path = f"{path}[{field}]"
+            else:
+                separator = "." if indexed_paths and path else ": "
+                field_path = f"{path}{separator}{field}" if path else str(field)
             return first_error(
                 error,
                 indexed_paths=indexed_paths,
