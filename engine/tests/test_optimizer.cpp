@@ -8,7 +8,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
-#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -259,25 +258,24 @@ void assert_golden_result(
     double expected_total_distance
 ) {
     assert(result.routes.size() == expected_routes.size());
-    std::cerr << std::setprecision(17)
-              << "Golden distances: actual " << result.max_distance_km
-              << ", " << result.total_distance_km << "; expected "
-              << expected_max_distance << ", " << expected_total_distance
-              << '\n';
-    for (std::size_t index = 0; index < expected_routes.size(); ++index) {
-        std::cerr << "Route " << index << ": actual";
-        for (const auto stop : result.routes[index].stop_order) {
-            std::cerr << ' ' << stop;
+    const auto canonical_routes = [](auto routes) {
+        // Vehicles are interchangeable and these closed Haversine routes are
+        // undirected. Preserve every edge while ignoring those symmetries.
+        for (auto& route : routes) {
+            auto reversed = route;
+            std::reverse(reversed.begin(), reversed.end());
+            route = std::min(route, reversed);
         }
-        std::cerr << "; expected";
-        for (const auto stop : expected_routes[index]) {
-            std::cerr << ' ' << stop;
-        }
-        std::cerr << '\n';
-        assert(result.routes[index].stop_order == expected_routes[index]);
+        std::sort(routes.begin(), routes.end());
+        return routes;
+    };
+    std::vector<std::vector<std::size_t>> actual_routes;
+    for (const auto& route : result.routes) {
+        actual_routes.push_back(route.stop_order);
     }
+    assert(canonical_routes(actual_routes) == canonical_routes(expected_routes));
     // libm results can differ by a few ULPs across build platforms. Keep the
-    // route assignment exact and allow only one micrometre of distance error.
+    // route edges exact and allow only one micrometre of distance error.
     assert(nearly_equal(result.max_distance_km, expected_max_distance, 1e-9));
     assert(nearly_equal(result.total_distance_km, expected_total_distance, 1e-9));
 }
