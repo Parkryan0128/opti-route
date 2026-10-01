@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -258,7 +259,21 @@ void assert_golden_result(
     double expected_total_distance
 ) {
     assert(result.routes.size() == expected_routes.size());
+    std::cerr << std::setprecision(17)
+              << "Golden distances: actual " << result.max_distance_km
+              << ", " << result.total_distance_km << "; expected "
+              << expected_max_distance << ", " << expected_total_distance
+              << '\n';
     for (std::size_t index = 0; index < expected_routes.size(); ++index) {
+        std::cerr << "Route " << index << ": actual";
+        for (const auto stop : result.routes[index].stop_order) {
+            std::cerr << ' ' << stop;
+        }
+        std::cerr << "; expected";
+        for (const auto stop : expected_routes[index]) {
+            std::cerr << ' ' << stop;
+        }
+        std::cerr << '\n';
         assert(result.routes[index].stop_order == expected_routes[index]);
     }
     // libm results can differ by a few ULPs across build platforms. Keep the
