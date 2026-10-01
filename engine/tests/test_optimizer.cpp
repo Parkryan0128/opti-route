@@ -261,8 +261,10 @@ void assert_golden_result(
     for (std::size_t index = 0; index < expected_routes.size(); ++index) {
         assert(result.routes[index].stop_order == expected_routes[index]);
     }
-    assert(result.max_distance_km == expected_max_distance);
-    assert(result.total_distance_km == expected_total_distance);
+    // libm results can differ by a few ULPs across build platforms. Keep the
+    // route assignment exact and allow only one micrometre of distance error.
+    assert(nearly_equal(result.max_distance_km, expected_max_distance, 1e-9));
+    assert(nearly_equal(result.total_distance_km, expected_total_distance, 1e-9));
 }
 
 template <typename Function>
