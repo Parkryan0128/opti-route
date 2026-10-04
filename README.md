@@ -6,8 +6,6 @@ The solver assigns each stop to a vehicle and determines the visit order. It pri
 
 [Live demo](https://optiroute.ryanparkdev.com)
 
-For the shared OVH VPS, use the [production deployment guide](docs/deployment.md). Main pushes build/test a production image; the Deploy workflow updates the VM after its one-time SSH setup is enabled.
-
 ## How it works
 
 ```text
@@ -125,9 +123,8 @@ cmake --build build/engine --parallel
 ctest --test-dir build/engine --output-on-failure
 ```
 
+[Production deployment guide](docs/deployment.md)
+
 ## Contact
 
-- **Name:** Ryan Park
-- **Email:** [parkryan0128@gmail.com](mailto:parkryan0128@gmail.com)
-- **LinkedIn:** [https://www.linkedin.com/in/parkryan0128](https://www.linkedin.com/in/parkryan0128)
-- **GitHub:** [https://github.com/Parkryan0128](https://github.com/Parkryan0128)
+Ryan Park · [Email](mailto:parkryan0128@gmail.com) · [LinkedIn](https://www.linkedin.com/in/parkryan0128) · [GitHub](https://github.com/Parkryan0128)
