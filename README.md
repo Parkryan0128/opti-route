@@ -123,8 +123,6 @@ cmake --build build/engine --parallel
 ctest --test-dir build/engine --output-on-failure
 ```
 
-[Production deployment guide](docs/deployment.md)
-
 ## Contact
 
 Ryan Park · [Email](mailto:parkryan0128@gmail.com) · [LinkedIn](https://www.linkedin.com/in/parkryan0128) · [GitHub](https://github.com/Parkryan0128)
